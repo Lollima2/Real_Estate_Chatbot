@@ -169,7 +169,7 @@ const ChatPage = () => {
                     ? 'bg-emerald-700 text-white'
                     : 'bg-white text-gray-900 shadow-sm border border-gray-200'
                 }`}>
-                  <p className="text-sm leading-relaxed">{message.content}</p>
+                  <p className="text-sm leading-relaxed whitespace-pre-line">{message.content}</p>
                 </div>
                 
                 {/* Data visualization */}
