@@ -14,7 +14,7 @@ const ChatPage = () => {
     {
       id: '1',
       type: 'bot',
-      content: 'Hello! I\'m your AI real estate assistant. I can help you with property searches, market analysis, and investment insights. What would you like to know?',
+      content: 'Hello! I\'m Cresta, your AI-powered commercial real estate assistant, built with Snowflake and Gemini AI. I can provide you with a list of commercial properties and their details — all within the United States. What would you like to explore today?',
       timestamp: new Date()
     }
   ]);

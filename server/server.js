@@ -97,6 +97,12 @@ app.get('/api/leases', (req, res) => {
   });
 });
 
+// Welcome message endpoint
+app.get('/api/welcome', (req, res) => {
+  const welcomeMessage = "Hello! I'm Cresta, your AI-powered commercial real estate assistant, built with Snowflake and Gemini AI. I can provide you with a list of commercial properties and their details — all within the United States. What would you like to explore today?";
+  res.json({ message: welcomeMessage });
+});
+
 // Parse user input with flexible patterns and grammar tolerance
 const parseUserInput = (message) => {
   const lowerMessage = message.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
