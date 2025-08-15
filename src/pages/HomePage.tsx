@@ -48,6 +48,27 @@ const HomePage = () => {
               Get instant insights into the US real estate market with our AI chatbot. 
               Search properties, analyze trends, and make informed decisions backed by comprehensive data.
             </p>
+            {/* Powered By Section */}
+            <div className="mb-8">
+              <div className="flex items-center justify-center space-x-6">
+                <span className="text-emerald-200/80 text-sm">Powered by</span>
+                <div className="flex items-center space-x-6">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-6 h-6 bg-gradient-to-r from-blue-400 to-white-500 rounded-full flex items-center justify-center">
+                      <span className="text-white text-xs font-bold">S</span>
+                    </div>
+                    <span className="text-white font-medium">Snowflake</span>
+                  </div>
+                  <div className="w-px h-4 bg-white/30"></div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-6 h-6 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center">
+                      <span className="text-white text-xs font-bold">G</span>
+                    </div>
+                    <span className="text-white font-medium">Gemini AI</span>
+                  </div>
+                </div>
+              </div>
+            </div>
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
               <Link
                 to="/chat"
