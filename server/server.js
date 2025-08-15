@@ -149,16 +149,23 @@ const parseUserInput = (message) => {
   const classMatch = lowerMessage.match(/class\s+([abc])/i);
   const buildingClass = classMatch ? classMatch[1].toUpperCase() : null;
   
-  // Extract city name with flexible patterns - exclude common phrases
-  const cityMatch = lowerMessage.match(/(?:properties|list)\s+(?:of\s+properties\s+)?(?:in|from|at|for)\s+([a-zA-Z\s]+?)(?:\s*$|,|\.)/i) ||
-                   lowerMessage.match(/(?:in|from|at|for)\s+([a-zA-Z\s]+?)(?:\s+(?:city|properties|buildings)|\s*$|,|\.)/i);
+  // Extract city name only when explicitly mentioned with location prepositions
+  let city = null;
   
-  let city = cityMatch ? cityMatch[1].trim().replace(/\s+/g, ' ') : null;
-  
-  // Filter out common phrases that aren't cities
-  const excludeWords = ['show me', 'give me', 'list of', 'all', 'some', 'any'];
-  if (city && excludeWords.some(word => city.toLowerCase().includes(word))) {
-    city = null;
+  // Only look for cities when there are clear location indicators
+  if (lowerMessage.includes(' in ') || lowerMessage.includes(' from ') || lowerMessage.includes(' at ') || lowerMessage.includes(' for ')) {
+    const cityMatch = lowerMessage.match(/(?:properties|list|buildings)\s+(?:of\s+properties\s+)?(?:in|from|at|for)\s+([a-zA-Z\s]+?)(?:\s+(?:city|properties|buildings)|\s*$|,|\.)/i) ||
+                     lowerMessage.match(/(?:in|from|at|for)\s+([a-zA-Z\s]+?)(?:\s+(?:city|properties|buildings)|\s*$|,|\.)/i);
+    
+    if (cityMatch) {
+      const potentialCity = cityMatch[1].trim().replace(/\s+/g, ' ');
+      
+      // Filter out common phrases that aren't cities
+      const excludeWords = ['show me', 'give me', 'list of', 'all', 'some', 'any', 'properties', 'buildings', 'the', 'a', 'an'];
+      if (potentialCity && !excludeWords.some(word => potentialCity.toLowerCase().includes(word)) && potentialCity.length >= 2) {
+        city = potentialCity;
+      }
+    }
   }
   
   // Extract building name with flexible patterns
@@ -293,7 +300,7 @@ app.post('/api/chat', async (req, res) => {
       lowerMessage.includes('list of all properties') || lowerMessage.includes('all properties')) && !filters.city) {
     // Get list of available cities for suggestions
     sqlQuery = 'SELECT DISTINCT CITY FROM PROPERTY WHERE CITY IS NOT NULL ORDER BY CITY LIMIT 15';
-    responseText = 'What city do you want to know?';
+    responseText = 'What city would you like to see properties in?';
     
     connection.execute({
       sqlText: sqlQuery,
@@ -372,15 +379,6 @@ app.post('/api/chat', async (req, res) => {
   console.log('Original message:', message);
   console.log('Lower message:', lowerMessage);
   console.log('Parsed filters:', filters);
-  
-  // Debug: Check if it should trigger city popup
-  const shouldShowCityPopup = (lowerMessage.includes('show me properties') || lowerMessage.includes('list of properties') || 
-      lowerMessage.includes('give me list of properties') || lowerMessage.includes('properties list') ||
-      lowerMessage.includes('show me list of properties') || lowerMessage.includes('show me list of all properties') ||
-      lowerMessage.includes('show me all list of properties') || lowerMessage.includes('give me list of all properties') ||
-      lowerMessage.includes('list of all properties') || lowerMessage.includes('all properties')) && !filters.city;
-  
-  console.log('Should show city popup:', shouldShowCityPopup);
   console.log('Executing SQL:', sqlQuery);
   console.log('Parameters:', params);
   
