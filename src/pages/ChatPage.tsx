@@ -61,19 +61,32 @@ const ChatPage = () => {
         body: JSON.stringify({ message: inputMessage })
       });
       
-      const data = await response.json();
-      console.log('API Response:', data); // Debug log
-      
       if (!response.ok) {
-        throw new Error(data.error || 'Server error');
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
+      
+      const text = await response.text();
+      if (!text) {
+        throw new Error('Empty response from server');
+      }
+      
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (parseError) {
+        console.error('JSON parse error:', parseError);
+        console.error('Response text:', text);
+        throw new Error('Invalid JSON response from server');
+      }
+      
+      console.log('API Response:', data);
       
       const botResponse: Message = {
         id: (Date.now() + 1).toString(),
         type: 'bot',
         content: data.response || 'Sorry, there was an error generating a response.',
         timestamp: new Date(),
-        data: data.data,
+        data: data.data || [],
         suggestions: data.suggestions
       };
       
@@ -83,7 +96,7 @@ const ChatPage = () => {
       const errorResponse: Message = {
         id: (Date.now() + 1).toString(),
         type: 'bot',
-        content: error instanceof Error ? error.message : 'Sorry, I\'m having trouble connecting to the database. Please make sure the server is running.',
+        content: error instanceof Error ? error.message : 'Sorry, I\'m having trouble connecting to the database. Please try again later.',
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorResponse]);
@@ -247,7 +260,7 @@ const ChatPage = () => {
               type="text"
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
               placeholder="Ask about real estate markets, prices, trends..."
               className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none transition-all duration-200"
             />
