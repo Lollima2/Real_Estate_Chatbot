@@ -54,16 +54,20 @@ const HomePage = () => {
                 <span className="text-emerald-200/80 text-sm">Powered by</span>
                 <div className="flex items-center space-x-6">
                   <div className="flex items-center space-x-2">
-                    <div className="w-6 h-6 bg-gradient-to-r from-blue-400 to-white-500 rounded-full flex items-center justify-center">
-                      <span className="text-white text-xs font-bold">S</span>
-                    </div>
+                    <img 
+                      src="https://registry.npmmirror.com/@lobehub/icons-static-png/latest/files/dark/snowflake-color.png" 
+                      alt="Snowflake" 
+                      className="w-6 h-6 filter brightness-0 invert"
+                    />
                     <span className="text-white font-medium">Snowflake</span>
                   </div>
                   <div className="w-px h-4 bg-white/30"></div>
                   <div className="flex items-center space-x-2">
-                    <div className="w-6 h-6 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center">
-                      <span className="text-white text-xs font-bold">G</span>
-                    </div>
+                    <img 
+                      src="https://www.pngall.com/wp-content/uploads/16/Google-Gemini-Logo-Transparent.png" 
+                      alt="Gemini AI" 
+                      className="w-6 h-6 filter brightness-0 invert"
+                    />
                     <span className="text-white font-medium">Gemini AI</span>
                   </div>
                 </div>
@@ -187,6 +191,7 @@ const HomePage = () => {
           </Link>
         </div>
       </div>
+      
     </div>
   );
 };
