@@ -13,23 +13,6 @@ const AboutPage = () => {
       title: 'AI-Driven Insights',
       description: 'Leverages Snowflake Cortex and advanced language models to convert natural language queries into actionable real estate intelligence.'
     },
-    {
-      icon: Shield,
-      title: 'Secure & Compliant',
-      description: 'Enterprise security with data masking, role-based access control, and GDPR/CCPA compliance for all user interactions.'
-    },
-    {
-      icon: Zap,
-      title: 'Lightning Fast',
-      description: 'Optimized warehouses and intelligent caching deliver sub-second response times for complex market analysis queries.'
-    }
-  ];
-
-  const dataPoints = [
-    { label: 'Active Listings', value: '2.5M+', description: 'Properties tracked nationwide' },
-    { label: 'Daily Updates', value: '500K+', description: 'Real-time market changes' },
-    { label: 'Market Coverage', value: '50 States', description: 'Complete US coverage' },
-    { label: 'Data Sources', value: '1,200+', description: 'MLS and public records' }
   ];
 
   return (
@@ -100,40 +83,8 @@ const AboutPage = () => {
         </div>
       </div>
 
-      {/* Data Stats Section */}
-      <div className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-4">
-              Comprehensive Market Coverage
-            </h2>
-            <p className="text-xl text-gray-600">
-              Real-time data aggregation from thousands of sources across the United States
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {dataPoints.map((stat, index) => (
-              <div key={index} className="text-center">
-                <div className="bg-emerald-50 rounded-2xl p-6 mb-4 border border-emerald-100">
-                  <div className="text-3xl lg:text-4xl font-bold text-emerald-700 mb-2">
-                    {stat.value}
-                  </div>
-                  <div className="text-lg font-semibold text-gray-900 mb-1">
-                    {stat.label}
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    {stat.description}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
       {/* Architecture Section */}
-      <div className="py-20 bg-gray-50">
+      <div className="py-20 bg-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-4">
