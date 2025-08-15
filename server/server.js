@@ -149,11 +149,17 @@ const parseUserInput = (message) => {
   const classMatch = lowerMessage.match(/class\s+([abc])/i);
   const buildingClass = classMatch ? classMatch[1].toUpperCase() : null;
   
-  // Extract city name with flexible patterns
+  // Extract city name with flexible patterns - exclude common phrases
   const cityMatch = lowerMessage.match(/(?:properties|list)\s+(?:of\s+properties\s+)?(?:in|from|at|for)\s+([a-zA-Z\s]+?)(?:\s*$|,|\.)/i) ||
-                   lowerMessage.match(/(?:in|from|at|for)\s+([a-zA-Z\s]+?)(?:\s+(?:city|properties|buildings)|\s*$|,|\.)/i) || 
-                   lowerMessage.match(/([a-zA-Z\s]+?)\s+(?:properties|buildings)/i);
-  const city = cityMatch ? cityMatch[1].trim().replace(/\s+/g, ' ') : null;
+                   lowerMessage.match(/(?:in|from|at|for)\s+([a-zA-Z\s]+?)(?:\s+(?:city|properties|buildings)|\s*$|,|\.)/i);
+  
+  let city = cityMatch ? cityMatch[1].trim().replace(/\s+/g, ' ') : null;
+  
+  // Filter out common phrases that aren't cities
+  const excludeWords = ['show me', 'give me', 'list of', 'all', 'some', 'any'];
+  if (city && excludeWords.some(word => city.toLowerCase().includes(word))) {
+    city = null;
+  }
   
   // Extract building name with flexible patterns
   const buildingMatch = lowerMessage.match(/(?:details|information|info)\s+(?:of|about|for)\s+(?:the\s+)?([a-zA-Z0-9\s&.-]+(?:\s+building|\s+tower|\s+center|\s+plaza|\s+complex|\s+avenue|\s+street))/i) ||
@@ -364,7 +370,17 @@ app.post('/api/chat', async (req, res) => {
   }
   
   console.log('Original message:', message);
+  console.log('Lower message:', lowerMessage);
   console.log('Parsed filters:', filters);
+  
+  // Debug: Check if it should trigger city popup
+  const shouldShowCityPopup = (lowerMessage.includes('show me properties') || lowerMessage.includes('list of properties') || 
+      lowerMessage.includes('give me list of properties') || lowerMessage.includes('properties list') ||
+      lowerMessage.includes('show me list of properties') || lowerMessage.includes('show me list of all properties') ||
+      lowerMessage.includes('show me all list of properties') || lowerMessage.includes('give me list of all properties') ||
+      lowerMessage.includes('list of all properties') || lowerMessage.includes('all properties')) && !filters.city;
+  
+  console.log('Should show city popup:', shouldShowCityPopup);
   console.log('Executing SQL:', sqlQuery);
   console.log('Parameters:', params);
   
