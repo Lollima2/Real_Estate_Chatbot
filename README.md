@@ -72,7 +72,7 @@ The chatbot helps **homebuyers, renters, investors, and agents** get **property 
 
 ---
 
-## 📦 Installation
+## Installation
 
 ```bash
 # 1. Clone the repository
@@ -234,7 +234,7 @@ It allows users to query listings, compare prices, retrieve neighborhood summari
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 ```
 real-estate-server/
@@ -247,7 +247,7 @@ real-estate-server/
 
 ---
 
-## 🚀 Installation & Setup
+## Installation & Setup
 
 ### 1️⃣ Clone the repository
 
