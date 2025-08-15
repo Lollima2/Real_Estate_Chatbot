@@ -301,18 +301,6 @@ GET /api/guidance?budget=900000&city=Portland
 }
 ```
 
----
-
-## 🛠 Technologies Used
-
-* **Node.js** – JavaScript runtime
-* **Express.js** – Web framework
-* **Snowflake SDK** – Connects to Snowflake data warehouse
-* **dotenv** – Environment variable management
-* **CORS** – Cross-Origin Resource Sharing
-
----
-
 ## License
 
 MIT License – Free to use and modify.
