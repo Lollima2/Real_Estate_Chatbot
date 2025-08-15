@@ -81,10 +81,6 @@ const HomePage = () => {
                 <MessageSquare className="w-5 h-5" />
                 <span>Start Chatting</span>
               </Link>
-              <button className="border-2 border-white text-white px-8 py-4 rounded-xl font-semibold text-lg hover:bg-white hover:text-emerald-800 transition-all duration-200 flex items-center space-x-2">
-                <TrendingUp className="w-5 h-5" />
-                <span>View Markets</span>
-              </button>
             </div>
           </div>
         </div>
@@ -120,54 +116,27 @@ const HomePage = () => {
         </div>
       </div>
 
-      {/* Market Preview Section */}
-      <div className="py-20 bg-gray-50">
+      {/* Disclaimer Section */}
+      <div className="py-12 bg-gray-100 border-t border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-4">
-              Live Market Data
-            </h2>
-            <p className="text-xl text-gray-600">
-              Real-time insights from major US metropolitan areas
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {marketData.map((market, index) => (
-              <div
-                key={index}
-                className="bg-white rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow duration-300"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-gray-900">{market.city}</h3>
-                  <div className={`p-1 rounded-full ${
-                    market.trend === 'up' ? 'bg-emerald-100' : 'bg-red-100'
-                  }`}>
-                    <TrendingUp className={`w-4 h-4 ${
-                      market.trend === 'up' ? 'text-emerald-600' : 'text-red-600 rotate-180'
-                    }`} />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <div className="text-2xl font-bold text-gray-900">{market.medianPrice}</div>
-                  <div className={`text-sm font-medium ${
-                    market.trend === 'up' ? 'text-emerald-600' : 'text-red-600'
-                  }`}>
-                    {market.change} this quarter
-                  </div>
-                </div>
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+              <div className="w-5 h-5 bg-yellow-400 rounded-full flex items-center justify-center mr-2">
+                <span className="text-white text-xs font-bold">!</span>
               </div>
-            ))}
-          </div>
-
-          <div className="text-center mt-12">
-            <Link
-              to="/chat"
-              className="inline-flex items-center space-x-2 bg-emerald-700 text-white px-8 py-4 rounded-xl font-semibold hover:bg-emerald-800 transition-colors duration-200 shadow-lg hover:shadow-xl"
-            >
-              <MessageSquare className="w-5 h-5" />
-              <span>Explore All Markets</span>
-            </Link>
+              Important Disclaimer
+            </h3>
+            <div className="text-sm text-gray-600 space-y-2">
+              <p>
+                <strong>This website and its chatbot are developed for project purposes only and are not intended for commercial use.</strong> 
+              </p>
+              <p>
+                The property information provided is sourced from the Snowflake Marketplace listing "Commercial Real Estate Data" by CompStak (view listing). The dataset covers the United States and represents a snapshot as of 2023 Q2.
+              </p>
+              <p>
+                This data is for informational purposes only and may not reflect the most current market conditions. We do not guarantee the accuracy, completeness, or timeliness of the information. Users should verify details independently before making any real estate, investment, or business decisions.
+              </p>
+            </div>
           </div>
         </div>
       </div>

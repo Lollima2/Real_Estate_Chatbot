@@ -10,7 +10,6 @@ const Navigation = () => {
     { path: '/', label: 'Home', icon: Home },
     { path: '/chat', label: 'Chat', icon: MessageSquare },
     { path: '/about', label: 'About', icon: Info },
-    { path: '/admin', label: 'Admin', icon: Settings },
   ];
 
   const isActive = (path: string) => location.pathname === path;
@@ -26,7 +25,7 @@ const Navigation = () => {
                 <Home className="w-4 h-4 text-white" />
               </div>
               <span className="font-bold text-xl text-gray-900 group-hover:text-emerald-700 transition-colors duration-200">
-                RealEstate AI
+                Cresta AI
               </span>
             </Link>
           </div>

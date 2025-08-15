@@ -14,7 +14,7 @@ const ChatPage = () => {
     {
       id: '1',
       type: 'bot',
-      content: 'Hello! I\'m Cresta, your AI-powered commercial real estate assistant, built with Snowflake and Gemini AI. I can provide you with a list of commercial properties and their details — all within the United States. What would you like to explore today?',
+      content: 'Hello! I’m Cresta, your AI-powered commercial real estate assistant, built with Snowflake and Gemini AI. I can provide you with a list of commercial properties and their details — all within the United States. The property information is sourced from the Snowflake Marketplace listing Commercial Real Estate Data by CompStak (view listing) and represents a snapshot as of 2023 Q2. What would you like to explore today?',
       timestamp: new Date()
     }
   ]);
