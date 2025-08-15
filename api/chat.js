@@ -15,7 +15,7 @@ const parseUserInput = (message) => {
   return { buildingClass, city };
 };
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   try {
     // Enable CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -132,6 +132,3 @@ export default async function handler(req, res) {
     return res.status(500).json({ 
       error: error.message || 'Internal server error',
       response: 'Sorry, I\'m having trouble connecting to the database. Please try again later.'
-    });
-  }
-}
