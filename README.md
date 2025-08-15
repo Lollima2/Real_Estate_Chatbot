@@ -126,50 +126,6 @@ npm run preview
 
 ---
 
-## API Endpoints
-
-### **GET /api/listings**
-
-Fetch property listings with optional filters.
-
-```bash
-curl "http://localhost:5000/api/listings?city=Seattle&maxPrice=500000"
-```
-
-**Response:**
-
-```json
-[
-  {
-    "address": "123 Pine St",
-    "city": "Seattle",
-    "price": 480000,
-    "bedrooms": 3,
-    "bathrooms": 2
-  }
-]
-```
-
-### **GET /api/neighborhood**
-
-Fetch neighborhood insights.
-
-```bash
-curl "http://localhost:5000/api/neighborhood?city=Seattle"
-```
-
-### **POST /api/chat**
-
-Ask the chatbot a real estate-related question.
-
-```bash
-curl -X POST "http://localhost:5000/api/chat" \
--H "Content-Type: application/json" \
--d '{"message":"Find houses in Austin under $400k"}'
-```
-
----
-
 ## Frontend Usage
 
 1. Open the app in your browser.
@@ -313,115 +269,10 @@ Checks if the server is running.
 ```json
 { "message": "Server is running" }
 ```
-
----
-
-### **2. Get Real Estate Listings**
-
-**Endpoint:**
-
-```
-GET /api/listings
-```
-
-**Query Parameters:**
-
-| Name  | Type   | Required | Description                         |
-| ----- | ------ | -------- | ----------------------------------- |
-| city  | string | No       | Filter by city                      |
-| state | string | No       | Filter by state                     |
-| limit | int    | No       | Max number of results (default: 10) |
-
-**Example Request:**
-
-```
-GET /api/listings?city=Los Angeles&state=CA&limit=5
-```
-
-**Example Response:**
-
-```json
-[
-  {
-    "id": 1,
-    "address": "123 Main St",
-    "city": "Los Angeles",
-    "state": "CA",
-    "price": 950000,
-    "bedrooms": 3,
-    "bathrooms": 2
-  }
 ]
-```
 
----
 
-### **3. Compare Property Prices**
-
-**Endpoint:**
-
-```
-GET /api/compare
-```
-
-**Query Parameters:**
-
-| Name  | Type   | Required | Description      |
-| ----- | ------ | -------- | ---------------- |
-| city1 | string | Yes      | First city name  |
-| city2 | string | Yes      | Second city name |
-
-**Example Request:**
-
-```
-GET /api/compare?city1=Los Angeles&city2=San Francisco
-```
-
-**Example Response:**
-
-```json
-{
-  "Los Angeles": { "average_price": 750000 },
-  "San Francisco": { "average_price": 1200000 }
-}
-```
-
----
-
-### **4. Get Neighborhood Summary**
-
-**Endpoint:**
-
-```
-GET /api/summary
-```
-
-**Query Parameters:**
-
-| Name | Type   | Required | Description |
-| ---- | ------ | -------- | ----------- |
-| city | string | Yes      | City name   |
-
-**Example Request:**
-
-```
-GET /api/summary?city=Seattle
-```
-
-**Example Response:**
-
-```json
-{
-  "city": "Seattle",
-  "average_price": 820000,
-  "average_bedrooms": 3,
-  "average_bathrooms": 2
-}
-```
-
----
-
-### **5. Get Buying or Renting Guidance**
+### **2. Get Buying or Renting Guidance**
 
 **Endpoint:**
 
