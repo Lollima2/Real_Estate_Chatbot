@@ -22,10 +22,20 @@ const connection = snowflake.createConnection({
   role: 'ACCOUNTADMIN'
 });
 
+// Check environment variables
+console.log('Environment check:');
+console.log('SNOWFLAKE_ACCOUNT:', process.env.SNOWFLAKE_ACCOUNT ? 'Set' : 'Missing');
+console.log('SNOWFLAKE_USERNAME:', process.env.SNOWFLAKE_USERNAME ? 'Set' : 'Missing');
+console.log('SNOWFLAKE_PASSWORD:', process.env.SNOWFLAKE_PASSWORD ? 'Set' : 'Missing');
+console.log('SNOWFLAKE_WAREHOUSE:', process.env.SNOWFLAKE_WAREHOUSE ? 'Set' : 'Missing');
+console.log('SNOWFLAKE_DATABASE:', process.env.SNOWFLAKE_DATABASE ? 'Set' : 'Missing');
+console.log('SNOWFLAKE_SCHEMA:', process.env.SNOWFLAKE_SCHEMA ? 'Set' : 'Missing');
+
 // Connect to Snowflake
 connection.connect((err, conn) => {
   if (err) {
     console.error('Unable to connect to Snowflake:', err.message);
+    console.error('Full error:', err);
   } else {
     console.log('Successfully connected to Snowflake.');
     console.log('=== Database Configuration ===');
@@ -108,6 +118,19 @@ app.get('/api/cities', (req, res) => {
       } else {
         res.json(rows);
       }
+    }
+  });
+});
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'Server is running',
+    timestamp: new Date().toISOString(),
+    env: {
+      snowflake_account: process.env.SNOWFLAKE_ACCOUNT ? 'Set' : 'Missing',
+      snowflake_username: process.env.SNOWFLAKE_USERNAME ? 'Set' : 'Missing',
+      snowflake_database: process.env.SNOWFLAKE_DATABASE ? 'Set' : 'Missing'
     }
   });
 });
@@ -333,6 +356,11 @@ app.post('/api/chat', async (req, res) => {
     responseText = 'Here is the average rent per square foot:';
   } else {
     return res.json({ response: 'I can help you search for specific buildings, cities, building classes (A, B, C), properties, leases, and rent information. Try: "Show me Class A properties", "Properties in New York", or "What cities are available?"' });
+  }
+  
+  // Add connection check
+  if (!connection) {
+    return res.status(500).json({ error: 'Database connection not available' });
   }
   
   console.log('Original message:', message);
