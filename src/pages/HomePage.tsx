@@ -1,6 +1,5 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
-import { MessageSquare, TrendingUp, MapPin, Search, BarChart3, Users } from 'lucide-react';
+import { MessageSquare, MapPin, Search, BarChart3, Users } from 'lucide-react';
 
 const HomePage = () => {
   const features = [
@@ -26,12 +25,7 @@ const HomePage = () => {
     }
   ];
 
-  const marketData = [
-    { city: 'San Francisco', medianPrice: '$1,450,000', change: '+5.2%', trend: 'up' },
-    { city: 'Austin', medianPrice: '$565,000', change: '+8.1%', trend: 'up' },
-    { city: 'Miami', medianPrice: '$485,000', change: '+3.7%', trend: 'up' },
-    { city: 'Denver', medianPrice: '$520,000', change: '-2.1%', trend: 'down' },
-  ];
+
 
   return (
     <div className="min-h-screen">

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { BarChart3, Database, Settings, Users, AlertCircle, CheckCircle, Activity, Clock } from 'lucide-react';
+import { useState } from 'react';
+import { BarChart3, Database, Settings, Users, CheckCircle, Activity, Clock } from 'lucide-react';
 
 const AdminPage = () => {
   const [activeTab, setActiveTab] = useState('overview');

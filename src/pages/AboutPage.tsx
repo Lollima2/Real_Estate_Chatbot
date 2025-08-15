@@ -1,5 +1,4 @@
-import React from 'react';
-import { Database, Brain, Shield, Zap, BarChart3, Users } from 'lucide-react';
+import { Database, Brain, BarChart3, Users } from 'lucide-react';
 
 const AboutPage = () => {
   const features = [

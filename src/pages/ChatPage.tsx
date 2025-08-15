@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, BarChart3, Map, Home, Sparkles } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Send, Bot, User, Home, Sparkles } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -92,51 +92,12 @@ const ChatPage = () => {
     setIsTyping(false);
   };
 
-  const generateResponse = (input: string) => {
-    const lowerInput = input.toLowerCase();
-    
-    if (lowerInput.includes('austin') || lowerInput.includes('texas')) {
-      return "Here's what I found for Austin, TX real estate market. The median home price is currently $565,000, up 8.1% from last year. The market is particularly strong in tech corridors like Domain and South Austin.";
-    } else if (lowerInput.includes('compare') && (lowerInput.includes('nyc') || lowerInput.includes('francisco'))) {
-      return "Comparing NYC vs San Francisco rent prices: NYC average 1BR is $3,200/month while SF is $3,800/month. However, SF has higher buying prices with median home at $1.45M vs NYC at $1.1M.";
-    } else if (lowerInput.includes('investment') || lowerInput.includes('best markets')) {
-      return "Top investment markets right now include Austin TX (+8.1% growth), Miami FL (+3.7%), and Nashville TN (+6.2%). These markets show strong job growth and population increases.";
-    } else if (lowerInput.includes('bedroom') && lowerInput.includes('denver')) {
-      return "Found 127 3-bedroom homes under $500k in Denver metro area. Most are in suburbs like Aurora, Westminster, and Thornton. Average price is $445k with 1,850 sq ft.";
-    } else {
-      return "I understand you're looking for real estate information. Could you please be more specific about the location, property type, or market data you need? I can help with prices, trends, comparisons, and investment analysis.";
-    }
-  };
 
-  const generateMockData = (input: string) => {
-    const lowerInput = input.toLowerCase();
-    
-    if (lowerInput.includes('austin')) {
-      return {
-        type: 'market_summary',
-        location: 'Austin, TX',
-        medianPrice: '$565,000',
-        priceChange: '+8.1%',
-        inventory: '2.1 months',
-        avgDaysOnMarket: 18
-      };
-    } else if (lowerInput.includes('compare')) {
-      return {
-        type: 'comparison',
-        cities: [
-          { name: 'NYC', rent1br: '$3,200', medianHome: '$1.1M' },
-          { name: 'San Francisco', rent1br: '$3,800', medianHome: '$1.45M' }
-        ]
-      };
-    }
-    return null;
-  };
 
   const handleQuickQuestion = (question: string) => {
     setInputMessage(question);
     // Auto-send the suggestion
     setTimeout(() => {
-      const event = new KeyboardEvent('keypress', { key: 'Enter' });
       handleSendMessage();
     }, 100);
   };
