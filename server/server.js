@@ -286,8 +286,8 @@ app.post('/api/chat', async (req, res) => {
       lowerMessage.includes('show me all list of properties') || lowerMessage.includes('give me list of all properties') ||
       lowerMessage.includes('list of all properties') || lowerMessage.includes('all properties')) && !filters.city) {
     // Get list of available cities for suggestions
-    sqlQuery = 'SELECT DISTINCT CITY FROM PROPERTY WHERE CITY IS NOT NULL ORDER BY CITY LIMIT 20';
-    responseText = 'On what city do you want to see the properties?';
+    sqlQuery = 'SELECT DISTINCT CITY FROM PROPERTY WHERE CITY IS NOT NULL ORDER BY CITY LIMIT 15';
+    responseText = 'What city do you want to know?';
     
     connection.execute({
       sqlText: sqlQuery,
@@ -296,13 +296,13 @@ app.post('/api/chat', async (req, res) => {
           console.error('SQL Error:', err.message);
           res.status(500).json({ error: err.message });
         } else {
-          const cities = rows ? rows.map(row => row.CITY).slice(0, 10) : [];
-          const suggestions = cities.map(city => `Properties in ${city}`);
+          const cities = rows ? rows.map(row => row.CITY) : [];
           res.json({ 
             response: responseText, 
             data: [], 
             count: 0,
-            suggestions: suggestions
+            suggestions: cities,
+            showCityPopup: true
           });
         }
       }

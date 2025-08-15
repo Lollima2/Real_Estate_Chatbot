@@ -8,6 +8,7 @@ interface Message {
   timestamp: Date;
   data?: any;
   suggestions?: string[];
+  showCityPopup?: boolean;
 }
 
 const ChatPage = () => {
@@ -21,6 +22,8 @@ const ChatPage = () => {
   ]);
   const [inputMessage, setInputMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [showCityPopup, setShowCityPopup] = useState(false);
+  const [availableCities, setAvailableCities] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -88,10 +91,17 @@ const ChatPage = () => {
         content: data.response || 'Sorry, there was an error generating a response.',
         timestamp: new Date(),
         data: data.data || [],
-        suggestions: data.suggestions
+        suggestions: data.suggestions,
+        showCityPopup: data.showCityPopup
       };
       
       setMessages(prev => [...prev, botResponse]);
+      
+      // Show city popup if requested
+      if (data.showCityPopup && data.suggestions) {
+        setAvailableCities(data.suggestions);
+        setShowCityPopup(true);
+      }
     } catch (error) {
       console.error('Chat error:', error);
       const errorResponse: Message = {
@@ -111,6 +121,14 @@ const ChatPage = () => {
   const handleQuickQuestion = (question: string) => {
     setInputMessage(question);
     // Auto-send the suggestion
+    setTimeout(() => {
+      handleSendMessage();
+    }, 100);
+  };
+  
+  const handleCitySelect = (city: string) => {
+    setShowCityPopup(false);
+    setInputMessage(`Properties in ${city}`);
     setTimeout(() => {
       handleSendMessage();
     }, 100);
@@ -159,8 +177,8 @@ const ChatPage = () => {
                   <p className="text-sm leading-relaxed whitespace-pre-line">{message.content}</p>
                 </div>
                 
-                {/* Suggestions */}
-                {message.suggestions && message.suggestions.length > 0 && (
+                {/* Suggestions (only show if not city popup) */}
+                {message.suggestions && message.suggestions.length > 0 && !message.showCityPopup && (
                   <div className="mt-3 bg-white rounded-xl p-4 shadow-sm border border-gray-200">
                     <div className="flex items-center space-x-2 text-emerald-700 font-medium mb-3">
                       <Sparkles className="w-4 h-4" />
@@ -231,6 +249,34 @@ const ChatPage = () => {
         )}
         <div ref={messagesEndRef} />
       </div>
+      
+      {/* City Selection Popup */}
+      {showCityPopup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 max-h-96 overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Select a City</h3>
+              <button
+                onClick={() => setShowCityPopup(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="grid grid-cols-1 gap-2">
+              {availableCities.map((city, index) => (
+                <button
+                  key={index}
+                  onClick={() => handleCitySelect(city)}
+                  className="text-left p-3 rounded-lg bg-gray-50 hover:bg-emerald-50 hover:text-emerald-700 transition-colors duration-200 border border-transparent hover:border-emerald-200"
+                >
+                  {city}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Quick Questions */}
       {messages.length === 1 && (
