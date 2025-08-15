@@ -462,7 +462,7 @@ GET /api/guidance?budget=900000&city=Portland
 
 ---
 
-## 📜 License
+## License
 
 MIT License – Free to use and modify.
 
