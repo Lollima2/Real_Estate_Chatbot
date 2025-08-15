@@ -291,7 +291,7 @@ http://localhost:3000
 
 ---
 
-## 📡 API Documentation
+## API Documentation
 
 All endpoints are prefixed with `/api`.
 
