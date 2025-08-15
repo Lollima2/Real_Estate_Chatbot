@@ -1,25 +1,31 @@
 const snowflake = require('snowflake-sdk');
 
 let connection;
+let isConnected = false;
 
 // Initialize Snowflake connection
-if (!connection) {
-  connection = snowflake.createConnection({
-    account: process.env.SNOWFLAKE_ACCOUNT,
-    username: process.env.SNOWFLAKE_USERNAME,
-    password: process.env.SNOWFLAKE_PASSWORD,
-    database: process.env.SNOWFLAKE_DATABASE,
-    schema: process.env.SNOWFLAKE_SCHEMA,
-    warehouse: process.env.SNOWFLAKE_WAREHOUSE
-  });
+function initConnection() {
+  if (!connection) {
+    connection = snowflake.createConnection({
+      account: process.env.SNOWFLAKE_ACCOUNT,
+      username: process.env.SNOWFLAKE_USERNAME,
+      password: process.env.SNOWFLAKE_PASSWORD,
+      database: process.env.SNOWFLAKE_DATABASE,
+      schema: process.env.SNOWFLAKE_SCHEMA,
+      warehouse: process.env.SNOWFLAKE_WAREHOUSE
+    });
 
-  connection.connect((err) => {
-    if (err) {
-      console.error('Unable to connect to Snowflake:', err.message);
-    } else {
-      console.log('Successfully connected to Snowflake');
-    }
-  });
+    connection.connect((err) => {
+      if (err) {
+        console.error('Unable to connect to Snowflake:', err.message);
+        isConnected = false;
+      } else {
+        console.log('Successfully connected to Snowflake');
+        isConnected = true;
+      }
+    });
+  }
+  return connection;
 }
 
 module.exports = (req, res) => {
@@ -41,6 +47,9 @@ module.exports = (req, res) => {
     return res.status(400).json({ error: 'Message is required' });
   }
 
+  // Initialize connection
+  const conn = initConnection();
+  
   const lowerMessage = message.toLowerCase();
   let sqlQuery = '';
   let responseText = '';
@@ -50,19 +59,20 @@ module.exports = (req, res) => {
     sqlQuery = 'SELECT DISTINCT CITY FROM PROPERTY WHERE CITY IS NOT NULL ORDER BY CITY LIMIT 15';
     responseText = 'What city would you like to see properties in?';
     
-    connection.execute({
+    conn.execute({
       sqlText: sqlQuery,
       complete: function(err, stmt, rows) {
         if (err) {
           console.error('SQL Error:', err.message);
-          res.status(500).json({ error: err.message });
+          res.status(500).json({ error: `Database error: ${err.message}` });
         } else {
           const cities = rows ? rows.map(row => row.CITY) : [];
           res.json({ 
             response: responseText, 
             data: [], 
             count: 0,
-            suggestions: cities.slice(0, 10)
+            suggestions: cities.slice(0, 10),
+            showCityPopup: true
           });
         }
       }
@@ -76,13 +86,13 @@ module.exports = (req, res) => {
     const city = cityMatch[1].trim();
     sqlQuery = 'SELECT BUILDING_NAME, CITY, STATE FROM PROPERTY WHERE UPPER(CITY) LIKE UPPER(?) ORDER BY BUILDING_NAME LIMIT 10';
     
-    connection.execute({
+    conn.execute({
       sqlText: sqlQuery,
       binds: [`%${city}%`],
       complete: function(err, stmt, rows) {
         if (err) {
           console.error('SQL Error:', err.message);
-          res.status(500).json({ error: err.message });
+          res.status(500).json({ error: `Database error: ${err.message}` });
         } else {
           if (rows && rows.length > 0) {
             const list = rows.map((prop, index) => 
