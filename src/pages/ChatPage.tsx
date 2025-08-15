@@ -7,6 +7,7 @@ interface Message {
   content: string;
   timestamp: Date;
   data?: any;
+  suggestions?: string[];
 }
 
 const ChatPage = () => {
@@ -32,7 +33,7 @@ const ChatPage = () => {
 
   const quickQuestions = [
     "Show me properties",
-    "What lease information do you have?",
+    "What cities are available?",
     "What's the average rent?",
     "Show me lease data"
   ];
@@ -52,7 +53,7 @@ const ChatPage = () => {
     setIsTyping(true);
 
     try {
-      const response = await fetch('http://localhost:3001/api/chat', {
+      const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -63,20 +64,26 @@ const ChatPage = () => {
       const data = await response.json();
       console.log('API Response:', data); // Debug log
       
+      if (!response.ok) {
+        throw new Error(data.error || 'Server error');
+      }
+      
       const botResponse: Message = {
         id: (Date.now() + 1).toString(),
         type: 'bot',
-        content: data.response || 'Sorry, I encountered an error.',
+        content: data.response || 'Sorry, there was an error generating a response.',
         timestamp: new Date(),
-        data: data.data
+        data: data.data,
+        suggestions: data.suggestions
       };
       
       setMessages(prev => [...prev, botResponse]);
     } catch (error) {
+      console.error('Chat error:', error);
       const errorResponse: Message = {
         id: (Date.now() + 1).toString(),
         type: 'bot',
-        content: 'Sorry, I\'m having trouble connecting to the database. Please make sure the server is running.',
+        content: error instanceof Error ? error.message : 'Sorry, I\'m having trouble connecting to the database. Please make sure the server is running.',
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorResponse]);
@@ -127,6 +134,11 @@ const ChatPage = () => {
 
   const handleQuickQuestion = (question: string) => {
     setInputMessage(question);
+    // Auto-send the suggestion
+    setTimeout(() => {
+      const event = new KeyboardEvent('keypress', { key: 'Enter' });
+      handleSendMessage();
+    }, 100);
   };
 
   return (
@@ -171,6 +183,27 @@ const ChatPage = () => {
                 }`}>
                   <p className="text-sm leading-relaxed whitespace-pre-line">{message.content}</p>
                 </div>
+                
+                {/* Suggestions */}
+                {message.suggestions && message.suggestions.length > 0 && (
+                  <div className="mt-3 bg-white rounded-xl p-4 shadow-sm border border-gray-200">
+                    <div className="flex items-center space-x-2 text-emerald-700 font-medium mb-3">
+                      <Sparkles className="w-4 h-4" />
+                      <span>Suggested cities:</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {message.suggestions.map((suggestion, index) => (
+                        <button
+                          key={index}
+                          onClick={() => handleQuickQuestion(suggestion)}
+                          className="text-left text-sm p-3 rounded-lg bg-gray-50 hover:bg-emerald-50 hover:text-emerald-700 transition-colors duration-200 border border-transparent hover:border-emerald-200"
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 
                 {/* Data visualization */}
                 {message.data && Array.isArray(message.data) && message.data.length > 0 && (

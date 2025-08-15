@@ -1,5 +1,6 @@
 // Basic Express server with Snowflake connection
 require('dotenv').config();
+
 const express = require('express');
 const snowflake = require('snowflake-sdk');
 const cors = require('cors');
@@ -97,6 +98,20 @@ app.get('/api/leases', (req, res) => {
   });
 });
 
+// Get available cities
+app.get('/api/cities', (req, res) => {
+  connection.execute({
+    sqlText: 'SELECT DISTINCT CITY, STATE, COUNT(*) as PROPERTY_COUNT FROM PROPERTY WHERE CITY IS NOT NULL GROUP BY CITY, STATE ORDER BY PROPERTY_COUNT DESC, CITY',
+    complete: function(err, stmt, rows) {
+      if (err) {
+        res.status(500).json({ error: err.message });
+      } else {
+        res.json(rows);
+      }
+    }
+  });
+});
+
 // Welcome message endpoint
 app.get('/api/welcome', (req, res) => {
   const welcomeMessage = "Hello! I'm Cresta, your AI-powered commercial real estate assistant, built with Snowflake and Gemini AI. I can provide you with a list of commercial properties and their details — all within the United States. What would you like to explore today?";
@@ -183,7 +198,6 @@ const formatFieldResponse = (fieldName, value, buildingName) => {
   
   const currentYear = new Date().getFullYear();
   const yearValue = parseInt(value);
-  console.log(`Processing field ${fieldName} with value:`, value, 'parsed as:', yearValue);
   
   switch (fieldName) {
     case 'BUILDING_SIZE':
@@ -191,11 +205,11 @@ const formatFieldResponse = (fieldName, value, buildingName) => {
     case 'NUMBER_OF_FLOORS':
       const floorCount = parseInt(value);
       if (floorCount >= 20) {
-        return `${buildingName} is an impressive ${value}-story high-rise, offering commanding views and substantial vertical presence in the market. This tower configuration provides excellent visibility and prestige for tenants.`;
+        return `${buildingName} is an impressive ${value}-story high-rise, offering commanding views and substantial vertical presence in the market.`;
       } else if (floorCount >= 10) {
-        return `${buildingName} features ${value} floors, representing a well-proportioned mid-rise structure that balances accessibility with professional stature and efficient vertical transportation.`;
+        return `${buildingName} features ${value} floors, representing a well-proportioned mid-rise structure.`;
       } else {
-        return `${buildingName} has ${value} floors, providing a more intimate, low-rise environment that offers easy access and a human-scale professional atmosphere.`;
+        return `${buildingName} has ${value} floors, providing a more intimate, low-rise environment.`;
       }
     case 'YEAR_BUILT':
       const ageBuilt = currentYear - yearValue;
@@ -213,55 +227,6 @@ const formatFieldResponse = (fieldName, value, buildingName) => {
   }
 };
 
-// Format property list as numbered bullets
-const formatPropertyList = (properties) => {
-  return properties.map((prop, index) => 
-    `${index + 1}. ${prop.BUILDING_NAME} – ${prop.CITY}, ${prop.STATE || 'N/A'}`
-  ).join('\n\n');
-};
-
-// Format city-specific property list with header
-const formatCityPropertyList = (properties, city) => {
-  const header = `Properties in ${city}\n\n`;
-  const list = properties.map((prop, index) => 
-    `${index + 1}. ${prop.BUILDING_NAME}`
-  ).join('\n\n');
-  return header + list;
-};
-
-// Enhanced property list response using Gemini
-const enhancePropertyListResponse = async (properties, city = null) => {
-  const propertyNames = properties.map(p => p.BUILDING_NAME).join(', ');
-  const count = properties.length;
-  
-  const prompt = city ? 
-    `Create a brief, professional response about ${count} commercial real estate properties in ${city}. The properties are: ${propertyNames}. Make it conversational and informative in 2-3 sentences.` :
-    `Create a brief, professional response about ${count} commercial real estate properties. The properties are: ${propertyNames}. Make it conversational and informative in 2-3 sentences.`;
-  
-  try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }]
-      })
-    });
-    
-    const data = await response.json();
-    const enhancedText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    
-    const list = properties.map((prop, index) => 
-      `${index + 1}. ${prop.BUILDING_NAME}`
-    ).join('\n\n');
-    
-    return `${enhancedText}\n\n${list}`;
-  } catch (error) {
-    console.error('Gemini API error:', error);
-    console.error('API Key exists:', !!process.env.GEMINI_API_KEY);
-    return city ? formatCityPropertyList(properties, city) : formatPropertyList(properties);
-  }
-};
-
 // Chatbot endpoint for natural language queries
 app.post('/api/chat', async (req, res) => {
   const { message } = req.body;
@@ -275,34 +240,66 @@ app.post('/api/chat', async (req, res) => {
   let isPropertyList = false;
   let isCityPropertyList = false;
   
-  // Check for building class availability requests first
-  if (lowerMessage.includes('building classes are available') || lowerMessage.includes('what building classes') ||
+  // Check for available cities requests
+  if (lowerMessage.includes('what cities are available') || lowerMessage.includes('available cities') ||
+      lowerMessage.includes('cities available') || lowerMessage.includes('show me cities') ||
+      lowerMessage.includes('list of cities') || lowerMessage.includes('which cities')) {
+    sqlQuery = 'SELECT DISTINCT CITY, STATE, COUNT(*) as PROPERTY_COUNT FROM PROPERTY WHERE CITY IS NOT NULL GROUP BY CITY, STATE ORDER BY PROPERTY_COUNT DESC, CITY';
+    responseText = 'Here are all the cities available in our commercial real estate database:';
+    isPropertyList = true;
+  }
+  // Check for building class availability requests
+  else if (lowerMessage.includes('building classes are available') || lowerMessage.includes('what building classes') ||
       lowerMessage.includes('available building class') || lowerMessage.includes('building class available') ||
       lowerMessage.includes('building classes')) {
     sqlQuery = 'SELECT DISTINCT BUILDING_CLASS FROM PROPERTY WHERE BUILDING_CLASS IS NOT NULL ORDER BY BUILDING_CLASS';
     responseText = 'Our portfolio features premium commercial properties across multiple building classifications:';
     isPropertyList = true;
   }
-  // Check for city-specific property list requests
-  else if (filters.city && (lowerMessage.includes('show me properties') || lowerMessage.includes('list of properties') || 
-      lowerMessage.includes('give me list of properties') || lowerMessage.includes('properties list'))) {
-    sqlQuery = 'SELECT BUILDING_NAME FROM PROPERTY WHERE UPPER(CITY) LIKE UPPER(?) ORDER BY BUILDING_NAME';
+  // Check for generic "show me properties" without city specification
+  else if ((lowerMessage.includes('show me properties') || lowerMessage.includes('list of properties') || 
+      lowerMessage.includes('give me list of properties') || lowerMessage.includes('properties list') ||
+      lowerMessage.includes('show me list of properties') || lowerMessage.includes('show me list of all properties') ||
+      lowerMessage.includes('show me all list of properties') || lowerMessage.includes('give me list of all properties') ||
+      lowerMessage.includes('list of all properties') || lowerMessage.includes('all properties')) && !filters.city) {
+    // Get list of available cities for suggestions
+    sqlQuery = 'SELECT DISTINCT CITY FROM PROPERTY WHERE CITY IS NOT NULL ORDER BY CITY LIMIT 20';
+    responseText = 'On what city do you want to see the properties?';
+    
+    connection.execute({
+      sqlText: sqlQuery,
+      complete: function(err, stmt, rows) {
+        if (err) {
+          console.error('SQL Error:', err.message);
+          res.status(500).json({ error: err.message });
+        } else {
+          const cities = rows ? rows.map(row => row.CITY).slice(0, 10) : [];
+          const suggestions = cities.map(city => `Properties in ${city}`);
+          res.json({ 
+            response: responseText, 
+            data: [], 
+            count: 0,
+            suggestions: suggestions
+          });
+        }
+      }
+    });
+    return;
+  }
+  // Check for general property list requests with city
+  else if ((lowerMessage.includes('show me properties') || lowerMessage.includes('list of properties') || 
+      lowerMessage.includes('give me list of properties') || lowerMessage.includes('properties list') ||
+      lowerMessage.includes('show me list of properties') || lowerMessage.includes('show me list of all properties') ||
+      lowerMessage.includes('show me all list of properties') || lowerMessage.includes('give me list of all properties') ||
+      lowerMessage.includes('list of all properties') || lowerMessage.includes('all properties')) && filters.city) {
+    sqlQuery = 'SELECT BUILDING_NAME, CITY, STATE FROM PROPERTY WHERE UPPER(CITY) LIKE UPPER(?) ORDER BY BUILDING_NAME';
     params = [`%${filters.city}%`];
     responseText = '';
     isCityPropertyList = true;
   }
-  // Check for general property list requests
-  else if (lowerMessage.includes('show me properties') || lowerMessage.includes('list of properties') || 
-      lowerMessage.includes('give me list of properties') || lowerMessage.includes('properties list') ||
-      lowerMessage.includes('show me list of properties') || lowerMessage.includes('show me list of all properties')) {
-    sqlQuery = 'SELECT BUILDING_NAME, CITY, STATE FROM PROPERTY ORDER BY BUILDING_NAME LIMIT 50';
-    responseText = '';
-    isPropertyList = true;
-  }
   // Priority order: Building Name > Building Class > City > General queries
   else if (filters.buildingName) {
     if (filters.specificField) {
-      // Try the query and handle column not found errors
       sqlQuery = `SELECT BUILDING_NAME, ${filters.specificField} FROM PROPERTY WHERE UPPER(BUILDING_NAME) LIKE UPPER(?) LIMIT 1`;
       params = [`%${filters.buildingName}%`];
       responseText = '';
@@ -310,11 +307,11 @@ app.post('/api/chat', async (req, res) => {
     } else if (filters.isDetailRequest) {
       sqlQuery = 'SELECT * FROM PROPERTY WHERE UPPER(BUILDING_NAME) LIKE UPPER(?)';
       params = [`%${filters.buildingName}%`];
-      responseText = `Here's a comprehensive overview of ${filters.buildingName}, a premier commercial property. This detailed profile showcases the building's key specifications, location advantages, and investment potential in today's dynamic real estate market.`;
+      responseText = `Here's a comprehensive overview of ${filters.buildingName}, a premier commercial property.`;
     } else {
       sqlQuery = 'SELECT * FROM PROPERTY WHERE UPPER(BUILDING_NAME) LIKE UPPER(?)';
       params = [`%${filters.buildingName}%`];
-      responseText = `Here's a comprehensive overview of ${filters.buildingName}, a premier commercial property. This detailed profile showcases the building's key specifications, location advantages, and investment potential in today's dynamic real estate market.`;
+      responseText = `Here's a comprehensive overview of ${filters.buildingName}, a premier commercial property.`;
     }
   } else if (filters.buildingClass) {
     sqlQuery = 'SELECT BUILDING_NAME FROM PROPERTY WHERE UPPER(BUILDING_CLASS) = ? ORDER BY BUILDING_NAME';
@@ -335,13 +332,11 @@ app.post('/api/chat', async (req, res) => {
     sqlQuery = 'SELECT AVG(RENT_PSF) as AVG_RENT FROM LEASE WHERE RENT_PSF IS NOT NULL';
     responseText = 'Here is the average rent per square foot:';
   } else {
-    return res.json({ response: 'I can help you search for specific buildings, cities, building classes (A, B, C), properties, leases, and rent information. Try: "Show me Class A properties" or "Properties in New York"' });
+    return res.json({ response: 'I can help you search for specific buildings, cities, building classes (A, B, C), properties, leases, and rent information. Try: "Show me Class A properties", "Properties in New York", or "What cities are available?"' });
   }
   
   console.log('Original message:', message);
   console.log('Parsed filters:', filters);
-  console.log('Building name detected:', filters.buildingName);
-  console.log('Specific field detected:', filters.specificField);
   console.log('Executing SQL:', sqlQuery);
   console.log('Parameters:', params);
   
@@ -359,18 +354,18 @@ app.post('/api/chat', async (req, res) => {
             const fieldValue = rows[0][filters.specificField];
             if (fieldValue !== undefined) {
               const formattedValue = formatFieldResponse(filters.specificField, fieldValue, rows[0].BUILDING_NAME);
-              console.log('Formatted response:', formattedValue);
               res.json({ response: formattedValue, data: [], count: 0 });
             } else {
-              // Field doesn't exist, show all building data instead
               res.json({ response: `Here are all available details for ${rows[0].BUILDING_NAME}:`, data: rows, count: rows.length });
             }
           } else if (isPropertyList) {
             const count = rows.length;
-            const intro = responseText || `Here are ${count} premium commercial properties in our portfolio. These assets offer diverse investment opportunities across key markets.`;
+            const intro = responseText || `Here are ${count} premium commercial properties in our portfolio.`;
             const list = rows.map((prop, index) => {
               if (prop.BUILDING_CLASS && !prop.BUILDING_NAME) {
                 return `${index + 1}. Class ${prop.BUILDING_CLASS}`;
+              } else if (prop.CITY && prop.STATE && prop.PROPERTY_COUNT) {
+                return `${index + 1}. ${prop.CITY}, ${prop.STATE} (${prop.PROPERTY_COUNT} properties)`;
               } else if (prop.CITY && prop.STATE) {
                 return `${index + 1}. ${prop.BUILDING_NAME} – ${prop.CITY}, ${prop.STATE || 'N/A'}`;
               } else {
@@ -381,7 +376,7 @@ app.post('/api/chat', async (req, res) => {
             res.json({ response: enhancedResponse, data: [], count: rows.length });
           } else if (isCityPropertyList) {
             const count = rows.length;
-            const intro = `Here are ${count} premium commercial properties in ${filters.city}. These represent excellent investment opportunities in this dynamic market.`;
+            const intro = `Here are ${count} premium commercial properties in ${filters.city}.`;
             const list = rows.map((prop, index) => 
               `${index + 1}. ${prop.BUILDING_NAME}`
             ).join('\n\n');
@@ -392,12 +387,12 @@ app.post('/api/chat', async (req, res) => {
           }
         } else {
           const noDataMessage = filters.buildingName ? 
-            `I couldn't find any information about ${filters.buildingName} in our current portfolio. This building may not be in our database or the name might be spelled differently.` :
+            `I couldn't find any information about ${filters.buildingName} in our current portfolio.` :
             filters.city ? 
-            `I apologize, but we currently don't have any properties available in ${filters.city}. Our portfolio focuses on other key markets at this time. Would you like to explore properties in our available locations, or I can help you find information about our current inventory in other cities?` :
+            `I apologize, but we currently don't have any properties available in ${filters.city}.` :
             filters.buildingClass ? 
-            `I apologize, but Class ${filters.buildingClass} properties are not currently available in our portfolio. Our current inventory focuses on other building classifications. Would you like to see what building classes we do have available, or explore properties in a specific location instead?` :
-            'I apologize, but I don\'t have any property information available right now. Please try again later or contact support for assistance.';
+            `I apologize, but Class ${filters.buildingClass} properties are not currently available in our portfolio.` :
+            'I apologize, but I don\'t have any property information available right now.';
           res.json({ response: noDataMessage, data: [], count: 0 });
         }
       }

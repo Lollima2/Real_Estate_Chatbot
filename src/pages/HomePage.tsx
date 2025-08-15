@@ -140,7 +140,6 @@ const HomePage = () => {
           </div>
         </div>
       </div>
-
       {/* CTA Section */}
       <div className="py-20 bg-emerald-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
