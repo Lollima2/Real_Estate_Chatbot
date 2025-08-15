@@ -36,7 +36,7 @@ The chatbot helps **homebuyers, renters, investors, and agents** get **property 
 
 ---
 
-## 🛠 Tech Stack
+## Tech Stack
 
 ### **Frontend**
 
