@@ -56,7 +56,7 @@ const ChatPage = () => {
     setIsTyping(true);
 
     try {
-      const apiUrl = process.env.NODE_ENV === 'development' ? 'http://localhost:3001/api/chat' : '/api/chat';
+      const apiUrl = '/api/chat';
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
