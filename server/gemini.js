@@ -3,7 +3,7 @@ const axios = require('axios');
 
 async function callGemini(prompt) {
   const apiKey = process.env.GEMINI_API_KEY;
-  const url = `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
   try {
     const response = await axios.post(url, {
       contents: [{ parts: [{ text: prompt }] }]
