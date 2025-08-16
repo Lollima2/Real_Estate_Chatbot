@@ -451,15 +451,29 @@ export default function handler(req, res) {
               }
             } else {
               try {
-                const geminiPrompt = `You are a commercial real estate assistant. The user asked: "${message}" but no data was found. Provide a brief, professional and helpful response (1-2 sentences) explaining that no results were found and suggest alternative searches. Be conversational and supportive.`;
-                const enhancedResponse = await callGemini(geminiPrompt);
+                let contextualPrompt = '';
+                if (filters.city) {
+                  if (lowerMessage.includes('properties')) {
+                    contextualPrompt = `You are a commercial real estate assistant. The user searched for properties in ${filters.city}, but no properties were found in our database for this city. Provide a brief, professional and helpful response (2-3 sentences) explaining that no properties are currently available in ${filters.city} and suggest they try searching in other major cities or check back later. Be conversational and supportive.`;
+                  } else if (lowerMessage.includes('lease')) {
+                    contextualPrompt = `You are a commercial real estate assistant. The user searched for lease information in ${filters.city}, but no lease data was found in our database for this city. Provide a brief, professional and helpful response (2-3 sentences) explaining that no lease information is currently available in ${filters.city} and suggest they try searching in other major cities or check back later. Be conversational and supportive.`;
+                  } else {
+                    contextualPrompt = `You are a commercial real estate assistant. The user searched for real estate information in ${filters.city}, but no data was found in our database for this city. Provide a brief, professional and helpful response (2-3 sentences) explaining that no information is currently available in ${filters.city} and suggest alternative searches. Be conversational and supportive.`;
+                  }
+                } else if (filters.buildingName) {
+                  contextualPrompt = `You are a commercial real estate assistant. The user searched for information about ${filters.buildingName}, but this building was not found in our database. Provide a brief, professional and helpful response (2-3 sentences) explaining that ${filters.buildingName} is not in our current portfolio and suggest they try searching for other buildings or check the spelling. Be conversational and supportive.`;
+                } else {
+                  contextualPrompt = `You are a commercial real estate assistant. The user asked: "${message}" but no data was found. Provide a brief, professional and helpful response (1-2 sentences) explaining that no results were found and suggest alternative searches. Be conversational and supportive.`;
+                }
+                
+                const enhancedResponse = await callGemini(contextualPrompt);
                 res.json({ response: enhancedResponse || 'No data found for your query.', data: [], count: 0 });
               } catch (error) {
                 const noDataMessage = filters.buildingName ? 
-                  `I couldn't find any information about ${filters.buildingName} in our current portfolio.` :
+                  `I couldn't find any information about ${filters.buildingName} in our current portfolio. Please check the spelling or try searching for other buildings.` :
                   filters.city ? 
-                  `I apologize, but we currently don't have any properties available in ${filters.city}.` :
-                  'I apologize, but I don\'t have any property information available right now.';
+                  `I apologize, but we currently don't have any properties or lease information available in ${filters.city}. Please try searching in other major cities like New York, Los Angeles, or Chicago.` :
+                  'I apologize, but I don\'t have any information available for your query right now. Please try a different search.';
                 res.json({ response: noDataMessage, data: [], count: 0 });
               }
             }
