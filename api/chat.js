@@ -40,6 +40,42 @@ const removeUnderscores = (obj) => {
   return obj;
 };
 
+// Parse user input with comprehensive patterns
+const parseUserInput = (message) => {
+  const lowerMessage = message.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  
+  const classMatch = lowerMessage.match(/class\s+([abc])/i);
+  const buildingClass = classMatch ? classMatch[1].toUpperCase() : null;
+  
+  let city = null;
+  if (lowerMessage.includes(' in ') || lowerMessage.includes(' from ') || lowerMessage.includes(' at ') || lowerMessage.includes(' for ')) {
+    const cityMatch = lowerMessage.match(/(?:properties|list|buildings)\s+(?:of\s+properties\s+)?(?:in|from|at|for)\s+([a-zA-Z\s]+?)(?:\s+(?:city|properties|buildings)|\s*$|,|\.)/i) ||
+                     lowerMessage.match(/(?:in|from|at|for)\s+([a-zA-Z\s]+?)(?:\s+(?:city|properties|buildings)|\s*$|,|\.)/i);
+    
+    if (cityMatch) {
+      const potentialCity = cityMatch[1].trim().replace(/\s+/g, ' ');
+      const excludeWords = ['show me', 'give me', 'list of', 'all', 'some', 'any', 'properties', 'buildings', 'the', 'a', 'an'];
+      if (potentialCity && !excludeWords.some(word => potentialCity.toLowerCase().includes(word)) && potentialCity.length >= 2) {
+        city = potentialCity;
+      }
+    }
+  }
+  
+  const buildingMatch = lowerMessage.match(/(?:lease)\s+(?:of|for)\s+(?:the\s+)?([a-zA-Z0-9\s&.-]+(?:\s+building|\s+tower|\s+center|\s+plaza|\s+complex|\s+avenue|\s+street))/i) ||
+                       lowerMessage.match(/(?:details|information|info)\s+(?:of|about|for)\s+(?:the\s+)?([a-zA-Z0-9\s&.-]+(?:\s+building|\s+tower|\s+center|\s+plaza|\s+complex|\s+avenue|\s+street))/i) ||
+                       lowerMessage.match(/(?:landlord)\s+(?:of|for)\s+(?:the\s+)?([a-zA-Z0-9\s&.-]+(?:\s+building|\s+tower|\s+center|\s+plaza|\s+complex|\s+avenue|\s+street))/i) ||
+                       lowerMessage.match(/(?:current\s+landlord)\s+(?:of|for)\s+(?:the\s+)?([a-zA-Z0-9\s&.-]+(?:\s+building|\s+tower|\s+center|\s+plaza|\s+complex|\s+avenue|\s+street))/i) ||
+                       lowerMessage.match(/(?:show|details|information)\s+(?:me\s+)?(?:of|about)?\s*([0-9]+\s+[a-zA-Z\s]+(?:ave|avenue|st|street|rd|road|blvd|boulevard)\s*[a-zA-Z]*)/i) ||
+                       lowerMessage.match(/(?:the\s+)?([a-zA-Z0-9\s&.-]+(?:\s+building|\s+tower|\s+center|\s+plaza|\s+complex|\s+avenue|\s+street))/i) ||
+                       lowerMessage.match(/([0-9]+\s+[a-zA-Z\s]+(?:ave|avenue|st|street|rd|road|blvd|boulevard)\s*[a-zA-Z]*)/i);
+  const buildingName = buildingMatch ? buildingMatch[1].trim() : null;
+  
+  const isDetailRequest = lowerMessage.includes('detail') || lowerMessage.includes('details') || 
+                         lowerMessage.includes('information') || lowerMessage.includes('info');
+  
+  return { buildingClass, city, buildingName, isDetailRequest };
+};
+
 export default function handler(req, res) {
   return new Promise((resolve) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -89,17 +125,137 @@ export default function handler(req, res) {
     });
 
     const lowerMessage = message.toLowerCase();
+    const filters = parseUserInput(message);
     let sqlQuery = '';
     let responseText = '';
     let params = [];
     let isPropertyList = false;
+    let isCityPropertyList = false;
 
-    // Simple query logic
-    if (lowerMessage.includes('cities')) {
-      sqlQuery = 'SELECT DISTINCT CITY, STATE, COUNT(*) as PROPERTY_COUNT FROM PROPERTY WHERE CITY IS NOT NULL GROUP BY CITY, STATE ORDER BY PROPERTY_COUNT DESC, CITY LIMIT 20';
-      responseText = 'Here are cities available in our database:';
+    // Comprehensive query logic matching server.js
+    if (filters.buildingName && (lowerMessage.includes('landlord') || lowerMessage.includes('owner') || lowerMessage.includes('owns')) && 
+        (lowerMessage.includes('details') || lowerMessage.includes('of') || lowerMessage.includes('portfolio') || 
+         lowerMessage.includes('who') || lowerMessage.includes('show') || lowerMessage.includes('tell') || 
+         lowerMessage.includes('information') || lowerMessage.includes('about') || lowerMessage.includes('find'))) {
+      sqlQuery = `
+        SELECT
+            p.current_landlord,
+            p.building_name,
+            p.street_address,
+            p.city,
+            p.state,
+            p.year_built,
+            p.building_class
+        FROM
+            property p
+        WHERE UPPER(p.building_name) LIKE UPPER(?) OR UPPER(p.building_name) LIKE UPPER(?)
+      `;
+      params = [`%${filters.buildingName}%`, `%${filters.buildingName.replace(/building|tower|center|plaza/gi, '').trim()}%`];
+      responseText = `Landlord details for ${filters.buildingName}:`;
+    }
+    else if (lowerMessage.includes('landlord') && lowerMessage.includes('portfolio') && filters.buildingName) {
+      sqlQuery = `
+        SELECT
+            p.current_landlord,
+            p.building_name,
+            p.street_address,
+            p.city,
+            p.state,
+            p.year_built,
+            p.building_class,
+            avg(l.adjusted_starting_rent) as average_starting_rent
+        FROM
+            lease l
+            JOIN property p ON l.property_id = p.id
+        WHERE UPPER(p.building_name) LIKE UPPER(?)
+        GROUP BY
+            p.current_landlord, p.building_name, p.street_address, p.city, p.state, p.year_built, p.building_class
+      `;
+      params = [`%${filters.buildingName}%`];
+      responseText = `Landlord portfolio details for ${filters.buildingName}:`;
+    }
+    else if (lowerMessage.includes('landlord') && (lowerMessage.includes('portfolio') || lowerMessage.includes('average rent') || lowerMessage.includes('rent'))) {
+      sqlQuery = `
+        SELECT
+            p.current_landlord,
+            p.street_address,
+            avg(l.adjusted_starting_rent) as average_starting_rent
+        FROM
+            lease l
+            JOIN property p ON l.property_id = p.id
+        GROUP BY
+            p.current_landlord, p.street_address
+        ORDER BY average_starting_rent DESC
+        LIMIT 15
+      `;
+      responseText = 'Here are landlord portfolios with average rents:';
+    }
+    else if (lowerMessage.includes('lease') && filters.buildingName) {
+      sqlQuery = `
+        SELECT
+            l.id,
+            l.street_address,
+            l.city,
+            l.state,
+            l.zip_code,
+            l.starting_rent,
+            l.net_effective_rent,
+            l.lease_type,
+            l.transaction_type,
+            l.lease_term,
+            l.execution_date,
+            l.commencement_date,
+            l.expiration_date
+        FROM
+            lease l
+            JOIN property p ON l.property_id = p.id
+        WHERE UPPER(p.building_name) LIKE UPPER(?)
+        ORDER BY l.execution_date DESC
+      `;
+      params = [`%${filters.buildingName}%`];
+      responseText = `Lease details for ${filters.buildingName}:`;
+    }
+    else if (lowerMessage.includes('lease') && filters.city) {
+      sqlQuery = `
+        SELECT
+            l.id,
+            l.street_address,
+            l.city,
+            l.state,
+            p.building_name,
+            l.starting_rent,
+            l.net_effective_rent,
+            l.lease_type,
+            l.lease_term,
+            p.building_class
+        FROM
+            lease l
+            JOIN property p ON l.property_id = p.id
+        WHERE UPPER(l.city) LIKE UPPER(?)
+        ORDER BY l.execution_date DESC
+        LIMIT 15
+      `;
+      params = [`%${filters.city}%`];
+      responseText = `Lease information for properties in ${filters.city}:`;
+    }
+    else if (lowerMessage.includes('cities') && (lowerMessage.includes('available') || lowerMessage.includes('what') || 
+        lowerMessage.includes('show') || lowerMessage.includes('list') || lowerMessage.includes('which') || 
+        lowerMessage.includes('tell') || lowerMessage.includes('find') || lowerMessage.includes('all'))) {
+      sqlQuery = 'SELECT DISTINCT CITY, STATE, COUNT(*) as PROPERTY_COUNT FROM PROPERTY WHERE CITY IS NOT NULL GROUP BY CITY, STATE ORDER BY PROPERTY_COUNT DESC, CITY';
+      responseText = 'Here are all the cities available in our commercial real estate database:';
       isPropertyList = true;
-    } else if (lowerMessage.includes('properties') && !lowerMessage.includes(' in ')) {
+    }
+    else if (lowerMessage.includes('building class') && (lowerMessage.includes('available') || lowerMessage.includes('what') || 
+        lowerMessage.includes('show') || lowerMessage.includes('list') || lowerMessage.includes('which') || 
+        lowerMessage.includes('tell') || lowerMessage.includes('find') || lowerMessage.includes('all'))) {
+      sqlQuery = 'SELECT DISTINCT BUILDING_CLASS FROM PROPERTY WHERE BUILDING_CLASS IS NOT NULL ORDER BY BUILDING_CLASS';
+      responseText = 'Our portfolio features premium commercial properties across multiple building classifications:';
+      isPropertyList = true;
+    }
+    else if (lowerMessage.includes('properties') && !filters.city && 
+        (lowerMessage.includes('show') || lowerMessage.includes('list') || lowerMessage.includes('give') || 
+         lowerMessage.includes('find') || lowerMessage.includes('tell') || lowerMessage.includes('what') || 
+         lowerMessage.includes('all') || lowerMessage.includes('display'))) {
       // Show city popup for generic property requests
       sqlQuery = 'SELECT DISTINCT CITY FROM PROPERTY WHERE CITY IS NOT NULL ORDER BY CITY LIMIT 15';
       responseText = 'What city would you like to see properties in?';
@@ -133,25 +289,36 @@ export default function handler(req, res) {
         });
       });
       return;
-    } else if (lowerMessage.includes('properties') && lowerMessage.includes(' in ')) {
-      // Extract city name from "Properties in [City]" query
-      const cityMatch = lowerMessage.match(/properties\s+in\s+([a-zA-Z\s]+)/i);
-      if (cityMatch) {
-        const cityName = cityMatch[1].trim();
-        sqlQuery = 'SELECT BUILDING_NAME, CITY, STATE FROM PROPERTY WHERE UPPER(CITY) LIKE UPPER(?) ORDER BY BUILDING_NAME LIMIT 20';
-        params = [`%${cityName}%`];
-        responseText = `Properties in ${cityName}:`;
-        isPropertyList = true;
-      } else {
-        sqlQuery = 'SELECT BUILDING_NAME, CITY, STATE FROM PROPERTY WHERE BUILDING_NAME IS NOT NULL ORDER BY BUILDING_NAME LIMIT 10';
-        responseText = 'Here are some properties:';
-        isPropertyList = true;
-      }
-    } else if (lowerMessage.includes('properties')) {
-      sqlQuery = 'SELECT BUILDING_NAME, CITY, STATE FROM PROPERTY WHERE BUILDING_NAME IS NOT NULL ORDER BY BUILDING_NAME LIMIT 10';
-      responseText = 'Here are some properties:';
+    }
+    else if (lowerMessage.includes('properties') && filters.city && 
+        (lowerMessage.includes('show') || lowerMessage.includes('list') || lowerMessage.includes('give') || 
+         lowerMessage.includes('find') || lowerMessage.includes('tell') || lowerMessage.includes('what') || 
+         lowerMessage.includes('all') || lowerMessage.includes('display'))) {
+      sqlQuery = 'SELECT BUILDING_NAME, CITY, STATE FROM PROPERTY WHERE UPPER(CITY) LIKE UPPER(?) ORDER BY BUILDING_NAME';
+      params = [`%${filters.city}%`];
+      responseText = '';
+      isCityPropertyList = true;
+    }
+    else if (filters.buildingName) {
+      sqlQuery = 'SELECT * FROM PROPERTY WHERE UPPER(BUILDING_NAME) LIKE UPPER(?) OR UPPER(STREET_ADDRESS) LIKE UPPER(?)';
+      params = [`%${filters.buildingName}%`, `%${filters.buildingName}%`];
+      responseText = `Here are the details for ${filters.buildingName}:`;
+    }
+    else if (filters.buildingClass) {
+      sqlQuery = 'SELECT BUILDING_NAME FROM PROPERTY WHERE UPPER(BUILDING_CLASS) = ? ORDER BY BUILDING_NAME';
+      params = [filters.buildingClass];
+      responseText = `Here's our premium collection of Class ${filters.buildingClass} commercial properties:`;
       isPropertyList = true;
-    } else if (lowerMessage.includes('lease')) {
+    }
+    else if (filters.city) {
+      sqlQuery = 'SELECT * FROM PROPERTY WHERE UPPER(CITY) LIKE UPPER(?)';
+      params = [`%${filters.city}%`];
+      responseText = `Properties in ${filters.city}:`;
+    }
+    else if ((lowerMessage.includes('lease') || lowerMessage.includes('leases')) && !filters.city && 
+        (lowerMessage.includes('show') || lowerMessage.includes('list') || lowerMessage.includes('give') || 
+         lowerMessage.includes('find') || lowerMessage.includes('tell') || lowerMessage.includes('what') || 
+         lowerMessage.includes('all') || lowerMessage.includes('display') || lowerMessage.includes('recent'))) {
       sqlQuery = `
         SELECT
             l.street_address,
@@ -161,19 +328,30 @@ export default function handler(req, res) {
             l.starting_rent,
             l.net_effective_rent,
             l.lease_type,
-            l.lease_term
+            l.lease_term,
+            p.building_class
         FROM
             lease l
             JOIN property p ON l.property_id = p.id
         ORDER BY l.execution_date DESC
         LIMIT 10
       `;
-      responseText = 'Here is recent lease information:';
-    } else if (lowerMessage.includes('rent') || lowerMessage.includes('average')) {
-      sqlQuery = 'SELECT AVG(starting_rent) as AVG_STARTING_RENT, AVG(net_effective_rent) as AVG_NET_RENT FROM lease WHERE starting_rent IS NOT NULL';
-      responseText = 'Here is the average rent information:';
-    } else {
-      res.json({ response: 'I can help you search for cities, properties, leases, and rent information. Try: "Show me properties", "What cities are available?", or "Show me lease data"' });
+      responseText = 'Here is recent lease information with property details:';
+    }
+    else if ((lowerMessage.includes('rent') || lowerMessage.includes('rental') || lowerMessage.includes('price')) && 
+        (lowerMessage.includes('average') || lowerMessage.includes('show') || lowerMessage.includes('what') || 
+         lowerMessage.includes('tell') || lowerMessage.includes('find') || lowerMessage.includes('get'))) {
+      if (filters.city) {
+        sqlQuery = 'SELECT AVG(l.starting_rent) as AVG_STARTING_RENT, AVG(l.net_effective_rent) as AVG_NET_RENT FROM lease l JOIN property p ON l.property_id = p.id WHERE UPPER(l.city) LIKE UPPER(?)';
+        params = [`%${filters.city}%`];
+        responseText = `Average rent information for ${filters.city}:`;
+      } else {
+        sqlQuery = 'SELECT AVG(starting_rent) as AVG_STARTING_RENT, AVG(net_effective_rent) as AVG_NET_RENT FROM lease WHERE starting_rent IS NOT NULL';
+        responseText = 'Here is the average rent information:';
+      }
+    }
+    else {
+      res.json({ response: 'I can help you search for specific buildings, cities, building classes (A, B, C), properties, leases, and rent information. Try: "Show me Class A properties", "Properties in New York", or "What cities are available?"' });
       resolve();
       return;
     }
@@ -199,47 +377,91 @@ export default function handler(req, res) {
               if (isPropertyList) {
                 const count = rows.length;
                 const list = rows.map((prop, index) => {
-                  if (prop.CITY && prop.STATE && prop.PROPERTY_COUNT) {
+                  if (prop.BUILDING_CLASS && !prop.BUILDING_NAME) {
+                    return `${index + 1}. Class ${prop.BUILDING_CLASS}`;
+                  } else if (prop.CITY && prop.STATE && prop.PROPERTY_COUNT) {
                     return `${index + 1}. ${prop.CITY}, ${prop.STATE} (${prop.PROPERTY_COUNT} properties)`;
-                  } else {
+                  } else if (prop.CITY && prop.STATE) {
                     return `${index + 1}. ${prop.BUILDING_NAME} – ${prop.CITY}, ${prop.STATE || 'N/A'}`;
+                  } else {
+                    return `${index + 1}. ${prop.BUILDING_NAME}`;
                   }
                 }).join('\n\n');
                 
                 try {
                   const dataContext = JSON.stringify(rows.slice(0, 3));
-                  const geminiPrompt = `You are a commercial real estate assistant. Based on this user query: "${message}" and this property data: ${dataContext}, provide a brief, professional response (2-3 sentences) that introduces the ${count} results found. Be conversational and helpful.`;
+                  const geminiPrompt = `You are a commercial real estate assistant. Based on this user query: "${message}" and this property data: ${dataContext}, provide a brief, professional response (2-3 sentences) that introduces the ${count} properties found. Be conversational and helpful.`;
                   const enhancedIntro = await callGemini(geminiPrompt);
                   const enhancedResponse = enhancedIntro ? `${enhancedIntro}\n\n${list}` : `${responseText}\n\n${list}`;
                   res.json({ response: enhancedResponse, data: [], count: rows.length });
                 } catch (error) {
-                  const enhancedResponse = `${responseText}\n\n${list}`;
+                  const intro = responseText || `Here are ${count} premium commercial properties in our portfolio.`;
+                  const enhancedResponse = `${intro}\n\n${list}`;
+                  res.json({ response: enhancedResponse, data: [], count: rows.length });
+                }
+              } else if (isCityPropertyList) {
+                const count = rows.length;
+                const list = rows.map((prop, index) => 
+                  `${index + 1}. ${prop.BUILDING_NAME}`
+                ).join('\n\n');
+                
+                try {
+                  const dataContext = JSON.stringify(rows.slice(0, 3));
+                  const geminiPrompt = `You are a commercial real estate assistant. Based on this user query: "${message}" and this property data in ${filters.city}: ${dataContext}, provide a brief, professional response (2-3 sentences) that introduces the ${count} properties found in ${filters.city}. Be conversational and helpful.`;
+                  const enhancedIntro = await callGemini(geminiPrompt);
+                  const enhancedResponse = enhancedIntro ? `${enhancedIntro}\n\n${list}` : `Here are ${count} premium commercial properties in ${filters.city}.\n\n${list}`;
+                  res.json({ response: enhancedResponse, data: [], count: rows.length });
+                } catch (error) {
+                  const intro = `Here are ${count} premium commercial properties in ${filters.city}.`;
+                  const enhancedResponse = `${intro}\n\n${list}`;
                   res.json({ response: enhancedResponse, data: [], count: rows.length });
                 }
               } else {
-                // Format lease/rent data
-                const formattedRows = rows.map(row => {
-                  if (row.AVG_STARTING_RENT || row.AVG_NET_RENT) {
-                    return {
-                      ...row,
-                      AVG_STARTING_RENT: row.AVG_STARTING_RENT ? `$${parseFloat(row.AVG_STARTING_RENT).toFixed(2)}` : 'N/A',
-                      AVG_NET_RENT: row.AVG_NET_RENT ? `$${parseFloat(row.AVG_NET_RENT).toFixed(2)}` : 'N/A'
-                    };
+                // Format lease data for better display
+                if (lowerMessage.includes('lease') || lowerMessage.includes('rent')) {
+                  const formattedRows = rows.map(row => {
+                    if (row.AVG_STARTING_RENT || row.AVG_NET_RENT) {
+                      return {
+                        ...row,
+                        AVG_STARTING_RENT: row.AVG_STARTING_RENT ? `$${parseFloat(row.AVG_STARTING_RENT).toFixed(2)}` : 'N/A',
+                        AVG_NET_RENT: row.AVG_NET_RENT ? `$${parseFloat(row.AVG_NET_RENT).toFixed(2)}` : 'N/A'
+                      };
+                    }
+                    return row;
+                  });
+                  
+                  try {
+                    const dataContext = JSON.stringify(formattedRows.slice(0, 3));
+                    const geminiPrompt = `You are a commercial real estate assistant. Based on this user query: "${message}" and this lease/rent data: ${dataContext}, provide a brief, professional response (2-3 sentences) that explains what the data shows. Be conversational and helpful.`;
+                    const enhancedResponse = await callGemini(geminiPrompt);
+                    res.json({ response: enhancedResponse || responseText, data: removeUnderscores(formattedRows), count: formattedRows.length });
+                  } catch (error) {
+                    res.json({ response: responseText, data: removeUnderscores(formattedRows), count: formattedRows.length });
                   }
-                  return row;
-                });
-                
-                try {
-                  const dataContext = JSON.stringify(formattedRows.slice(0, 3));
-                  const geminiPrompt = `You are a commercial real estate assistant. Based on this user query: "${message}" and this data: ${dataContext}, provide a brief, professional response (2-3 sentences) that explains what the data shows. Be conversational and helpful.`;
-                  const enhancedResponse = await callGemini(geminiPrompt);
-                  res.json({ response: enhancedResponse || responseText, data: removeUnderscores(formattedRows), count: formattedRows.length });
-                } catch (error) {
-                  res.json({ response: responseText, data: removeUnderscores(formattedRows), count: formattedRows.length });
+                } else {
+                  try {
+                    const dataContext = JSON.stringify(rows.slice(0, 3));
+                    const geminiPrompt = `You are a commercial real estate assistant. Based on this user query: "${message}" and this data: ${dataContext}, provide a brief, professional response (2-3 sentences) that explains what the data shows. Be conversational and helpful.`;
+                    const enhancedResponse = await callGemini(geminiPrompt);
+                    res.json({ response: enhancedResponse || responseText, data: removeUnderscores(rows), count: rows.length });
+                  } catch (error) {
+                    res.json({ response: responseText, data: removeUnderscores(rows), count: rows.length });
+                  }
                 }
               }
             } else {
-              res.json({ response: 'No data found for your query.', data: [], count: 0 });
+              try {
+                const geminiPrompt = `You are a commercial real estate assistant. The user asked: "${message}" but no data was found. Provide a brief, professional and helpful response (1-2 sentences) explaining that no results were found and suggest alternative searches. Be conversational and supportive.`;
+                const enhancedResponse = await callGemini(geminiPrompt);
+                res.json({ response: enhancedResponse || 'No data found for your query.', data: [], count: 0 });
+              } catch (error) {
+                const noDataMessage = filters.buildingName ? 
+                  `I couldn't find any information about ${filters.buildingName} in our current portfolio.` :
+                  filters.city ? 
+                  `I apologize, but we currently don't have any properties available in ${filters.city}.` :
+                  'I apologize, but I don\'t have any property information available right now.';
+                res.json({ response: noDataMessage, data: [], count: 0 });
+              }
             }
             resolve();
           }
