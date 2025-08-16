@@ -4,6 +4,11 @@ const axios = require('axios');
 // Gemini API helper
 async function callGemini(prompt) {
   const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.error('GEMINI_API_KEY not found');
+    return null;
+  }
+  
   const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
   try {
     const response = await axios.post(url, {
@@ -15,7 +20,7 @@ async function callGemini(prompt) {
     );
   } catch (err) {
     console.error('Gemini API error:', err?.response?.data || err.message);
-    return 'Sorry, there was an error generating a response.';
+    return null;
   }
 }
 
@@ -52,7 +57,7 @@ function initConnection() {
   return connection;
 }
 
-// Parse user input
+// Parse user input with comprehensive patterns
 const parseUserInput = (message) => {
   const lowerMessage = message.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
   
@@ -117,7 +122,7 @@ module.exports = async (req, res) => {
   let isPropertyList = false;
   let isCityPropertyList = false;
 
-  // Enhanced query logic with all patterns
+  // Comprehensive query logic matching server.js
   if (filters.buildingName && (lowerMessage.includes('landlord') || lowerMessage.includes('owner') || lowerMessage.includes('owns')) && 
       (lowerMessage.includes('details') || lowerMessage.includes('of') || lowerMessage.includes('portfolio') || 
        lowerMessage.includes('who') || lowerMessage.includes('show') || lowerMessage.includes('tell') || 
@@ -143,6 +148,13 @@ module.exports = async (req, res) => {
       lowerMessage.includes('tell') || lowerMessage.includes('find') || lowerMessage.includes('all'))) {
     sqlQuery = 'SELECT DISTINCT CITY, STATE, COUNT(*) as PROPERTY_COUNT FROM PROPERTY WHERE CITY IS NOT NULL GROUP BY CITY, STATE ORDER BY PROPERTY_COUNT DESC, CITY';
     responseText = 'Here are all the cities available in our commercial real estate database:';
+    isPropertyList = true;
+  }
+  else if (lowerMessage.includes('building class') && (lowerMessage.includes('available') || lowerMessage.includes('what') || 
+      lowerMessage.includes('show') || lowerMessage.includes('list') || lowerMessage.includes('which') || 
+      lowerMessage.includes('tell') || lowerMessage.includes('find') || lowerMessage.includes('all'))) {
+    sqlQuery = 'SELECT DISTINCT BUILDING_CLASS FROM PROPERTY WHERE BUILDING_CLASS IS NOT NULL ORDER BY BUILDING_CLASS';
+    responseText = 'Our portfolio features premium commercial properties across multiple building classifications:';
     isPropertyList = true;
   }
   else if (lowerMessage.includes('properties') && !filters.city && 
@@ -195,10 +207,58 @@ module.exports = async (req, res) => {
     params = [`%${filters.buildingName}%`, `%${filters.buildingName}%`];
     responseText = `Here are the details for ${filters.buildingName}:`;
   }
+  else if (filters.buildingClass) {
+    sqlQuery = 'SELECT BUILDING_NAME FROM PROPERTY WHERE UPPER(BUILDING_CLASS) = ? ORDER BY BUILDING_NAME';
+    params = [filters.buildingClass];
+    responseText = `Here's our premium collection of Class ${filters.buildingClass} commercial properties:`;
+    isPropertyList = true;
+  }
   else if (filters.city) {
     sqlQuery = 'SELECT * FROM PROPERTY WHERE UPPER(CITY) LIKE UPPER(?)';
     params = [`%${filters.city}%`];
     responseText = `Properties in ${filters.city}:`;
+  }
+  else if ((lowerMessage.includes('properties') || lowerMessage.includes('buildings')) && 
+      (lowerMessage.includes('show') || lowerMessage.includes('list') || lowerMessage.includes('give') || 
+       lowerMessage.includes('find') || lowerMessage.includes('tell') || lowerMessage.includes('what') || 
+       lowerMessage.includes('all') || lowerMessage.includes('display'))) {
+    sqlQuery = 'SELECT * FROM PROPERTY LIMIT 10';
+    responseText = 'Here are properties in our database:';
+  }
+  else if ((lowerMessage.includes('lease') || lowerMessage.includes('leases')) && !filters.city && 
+      (lowerMessage.includes('show') || lowerMessage.includes('list') || lowerMessage.includes('give') || 
+       lowerMessage.includes('find') || lowerMessage.includes('tell') || lowerMessage.includes('what') || 
+       lowerMessage.includes('all') || lowerMessage.includes('display') || lowerMessage.includes('recent'))) {
+    sqlQuery = `
+      SELECT
+          l.street_address,
+          l.city,
+          l.state,
+          p.building_name,
+          l.starting_rent,
+          l.net_effective_rent,
+          l.lease_type,
+          l.lease_term,
+          p.building_class
+      FROM
+          lease l
+          JOIN property p ON l.property_id = p.id
+      ORDER BY l.execution_date DESC
+      LIMIT 10
+    `;
+    responseText = 'Here is recent lease information with property details:';
+  }
+  else if ((lowerMessage.includes('rent') || lowerMessage.includes('rental') || lowerMessage.includes('price')) && 
+      (lowerMessage.includes('average') || lowerMessage.includes('show') || lowerMessage.includes('what') || 
+       lowerMessage.includes('tell') || lowerMessage.includes('find') || lowerMessage.includes('get'))) {
+    if (filters.city) {
+      sqlQuery = 'SELECT AVG(l.starting_rent) as AVG_STARTING_RENT, AVG(l.net_effective_rent) as AVG_NET_RENT FROM lease l JOIN property p ON l.property_id = p.id WHERE UPPER(l.city) LIKE UPPER(?)';
+      params = [`%${filters.city}%`];
+      responseText = `Average rent information for ${filters.city}:`;
+    } else {
+      sqlQuery = 'SELECT AVG(starting_rent) as AVG_STARTING_RENT, AVG(net_effective_rent) as AVG_NET_RENT FROM lease WHERE starting_rent IS NOT NULL';
+      responseText = 'Here is the average rent information:';
+    }
   }
   else {
     return res.json({ response: 'I can help you search for specific buildings, cities, building classes (A, B, C), properties, leases, and rent information. Try: "Show me Class A properties", "Properties in New York", or "What cities are available?"' });
@@ -224,8 +284,12 @@ module.exports = async (req, res) => {
               if (isPropertyList) {
                 const count = rows.length;
                 const list = rows.map((prop, index) => {
-                  if (prop.CITY && prop.STATE && prop.PROPERTY_COUNT) {
+                  if (prop.BUILDING_CLASS && !prop.BUILDING_NAME) {
+                    return `${index + 1}. Class ${prop.BUILDING_CLASS}`;
+                  } else if (prop.CITY && prop.STATE && prop.PROPERTY_COUNT) {
                     return `${index + 1}. ${prop.CITY}, ${prop.STATE} (${prop.PROPERTY_COUNT} properties)`;
+                  } else if (prop.CITY && prop.STATE) {
+                    return `${index + 1}. ${prop.BUILDING_NAME} – ${prop.CITY}, ${prop.STATE || 'N/A'}`;
                   } else {
                     return `${index + 1}. ${prop.BUILDING_NAME}`;
                   }
@@ -235,7 +299,7 @@ module.exports = async (req, res) => {
                   const dataContext = JSON.stringify(rows.slice(0, 3));
                   const geminiPrompt = `You are a commercial real estate assistant. Based on this user query: "${message}" and this property data: ${dataContext}, provide a brief, professional response (2-3 sentences) that introduces the ${count} properties found. Be conversational and helpful.`;
                   const enhancedIntro = await callGemini(geminiPrompt);
-                  const enhancedResponse = `${enhancedIntro}\n\n${list}`;
+                  const enhancedResponse = enhancedIntro ? `${enhancedIntro}\n\n${list}` : `${responseText}\n\n${list}`;
                   res.json({ response: enhancedResponse, data: [], count: rows.length });
                 } catch (error) {
                   const intro = responseText || `Here are ${count} premium commercial properties in our portfolio.`;
@@ -252,7 +316,7 @@ module.exports = async (req, res) => {
                   const dataContext = JSON.stringify(rows.slice(0, 3));
                   const geminiPrompt = `You are a commercial real estate assistant. Based on this user query: "${message}" and this property data in ${filters.city}: ${dataContext}, provide a brief, professional response (2-3 sentences) that introduces the ${count} properties found in ${filters.city}. Be conversational and helpful.`;
                   const enhancedIntro = await callGemini(geminiPrompt);
-                  const enhancedResponse = `${enhancedIntro}\n\n${list}`;
+                  const enhancedResponse = enhancedIntro ? `${enhancedIntro}\n\n${list}` : `Here are ${count} premium commercial properties in ${filters.city}.\n\n${list}`;
                   res.json({ response: enhancedResponse, data: [], count: rows.length });
                 } catch (error) {
                   const intro = `Here are ${count} premium commercial properties in ${filters.city}.`;
@@ -260,20 +324,43 @@ module.exports = async (req, res) => {
                   res.json({ response: enhancedResponse, data: [], count: rows.length });
                 }
               } else {
-                try {
-                  const dataContext = JSON.stringify(rows.slice(0, 3));
-                  const geminiPrompt = `You are a commercial real estate assistant. Based on this user query: "${message}" and this data: ${dataContext}, provide a brief, professional response (2-3 sentences) that explains what the data shows. Be conversational and helpful.`;
-                  const enhancedResponse = await callGemini(geminiPrompt);
-                  res.json({ response: enhancedResponse, data: removeUnderscores(rows), count: rows.length });
-                } catch (error) {
-                  res.json({ response: responseText, data: removeUnderscores(rows), count: rows.length });
+                // Format lease data for better display
+                if (lowerMessage.includes('lease') || lowerMessage.includes('rent')) {
+                  const formattedRows = rows.map(row => {
+                    if (row.AVG_STARTING_RENT || row.AVG_NET_RENT) {
+                      return {
+                        ...row,
+                        AVG_STARTING_RENT: row.AVG_STARTING_RENT ? `$${parseFloat(row.AVG_STARTING_RENT).toFixed(2)}` : 'N/A',
+                        AVG_NET_RENT: row.AVG_NET_RENT ? `$${parseFloat(row.AVG_NET_RENT).toFixed(2)}` : 'N/A'
+                      };
+                    }
+                    return row;
+                  });
+                  
+                  try {
+                    const dataContext = JSON.stringify(formattedRows.slice(0, 3));
+                    const geminiPrompt = `You are a commercial real estate assistant. Based on this user query: "${message}" and this lease/rent data: ${dataContext}, provide a brief, professional response (2-3 sentences) that explains what the data shows. Be conversational and helpful.`;
+                    const enhancedResponse = await callGemini(geminiPrompt);
+                    res.json({ response: enhancedResponse || responseText, data: removeUnderscores(formattedRows), count: formattedRows.length });
+                  } catch (error) {
+                    res.json({ response: responseText, data: removeUnderscores(formattedRows), count: formattedRows.length });
+                  }
+                } else {
+                  try {
+                    const dataContext = JSON.stringify(rows.slice(0, 3));
+                    const geminiPrompt = `You are a commercial real estate assistant. Based on this user query: "${message}" and this data: ${dataContext}, provide a brief, professional response (2-3 sentences) that explains what the data shows. Be conversational and helpful.`;
+                    const enhancedResponse = await callGemini(geminiPrompt);
+                    res.json({ response: enhancedResponse || responseText, data: removeUnderscores(rows), count: rows.length });
+                  } catch (error) {
+                    res.json({ response: responseText, data: removeUnderscores(rows), count: rows.length });
+                  }
                 }
               }
             } else {
               try {
                 const geminiPrompt = `You are a commercial real estate assistant. The user asked: "${message}" but no data was found. Provide a brief, professional and helpful response (1-2 sentences) explaining that no results were found and suggest alternative searches. Be conversational and supportive.`;
                 const enhancedResponse = await callGemini(geminiPrompt);
-                res.json({ response: enhancedResponse, data: [], count: 0 });
+                res.json({ response: enhancedResponse || 'No data found for your query.', data: [], count: 0 });
               } catch (error) {
                 const noDataMessage = filters.buildingName ? 
                   `I couldn't find any information about ${filters.buildingName} in our current portfolio.` :
