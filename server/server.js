@@ -5,6 +5,7 @@ const express = require('express');
 const snowflake = require('snowflake-sdk');
 const cors = require('cors');
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+const callGemini = require('./gemini');
 
 const app = express();
 app.use(cors());
@@ -30,6 +31,22 @@ console.log('SNOWFLAKE_PASSWORD:', process.env.SNOWFLAKE_PASSWORD ? 'Set' : 'Mis
 console.log('SNOWFLAKE_WAREHOUSE:', process.env.SNOWFLAKE_WAREHOUSE ? 'Set' : 'Missing');
 console.log('SNOWFLAKE_DATABASE:', process.env.SNOWFLAKE_DATABASE ? 'Set' : 'Missing');
 console.log('SNOWFLAKE_SCHEMA:', process.env.SNOWFLAKE_SCHEMA ? 'Set' : 'Missing');
+
+// Utility function to remove underscores from object keys
+const removeUnderscores = (obj) => {
+  if (Array.isArray(obj)) {
+    return obj.map(removeUnderscores);
+  }
+  if (obj !== null && typeof obj === 'object') {
+    const newObj = {};
+    for (const [key, value] of Object.entries(obj)) {
+      const newKey = key.replace(/_/g, ' ');
+      newObj[newKey] = removeUnderscores(value);
+    }
+    return newObj;
+  }
+  return obj;
+};
 
 // Connect to Snowflake
 connection.connect((err, conn) => {
@@ -88,7 +105,7 @@ app.get('/api/properties', (req, res) => {
       if (err) {
         res.status(500).json({ error: err.message });
       } else {
-        res.json(rows);
+        res.json(removeUnderscores(rows));
       }
     }
   });
@@ -102,7 +119,7 @@ app.get('/api/leases', (req, res) => {
       if (err) {
         res.status(500).json({ error: err.message });
       } else {
-        res.json(rows);
+        res.json(removeUnderscores(rows));
       }
     }
   });
@@ -116,7 +133,114 @@ app.get('/api/cities', (req, res) => {
       if (err) {
         res.status(500).json({ error: err.message });
       } else {
-        res.json(rows);
+        res.json(removeUnderscores(rows));
+      }
+    }
+  });
+});
+
+// Get landlord portfolio with average rents
+app.get('/api/landlord-portfolio', (req, res) => {
+  const { landlord, limit = 50 } = req.query;
+  
+  let sqlQuery = `
+    SELECT
+        p.current_landlord,
+        p.street_address,
+        avg(l.adjusted_starting_rent) as average_starting_rent
+    FROM
+        lease l
+        JOIN property p ON l.property_id = p.id
+  `;
+  
+  const params = [];
+  
+  if (landlord) {
+    sqlQuery += ' WHERE UPPER(p.current_landlord) LIKE UPPER(?)';
+    params.push(`%${landlord}%`);
+  }
+  
+  sqlQuery += ` GROUP BY p.current_landlord, p.street_address ORDER BY average_starting_rent DESC LIMIT ${parseInt(limit)}`;
+  
+  connection.execute({
+    sqlText: sqlQuery,
+    binds: params,
+    complete: function(err, stmt, rows) {
+      if (err) {
+        res.status(500).json({ error: err.message });
+      } else {
+        res.json({
+          data: removeUnderscores(rows),
+          count: rows ? rows.length : 0,
+          query_params: { landlord, limit }
+        });
+      }
+    }
+  });
+});
+
+// Get joined lease and property data
+app.get('/api/lease-properties', (req, res) => {
+  const { city, state, limit = 50 } = req.query;
+  
+  let sqlQuery = `
+    SELECT
+        l.id,
+        l.street_address,
+        l.city,
+        l.state,
+        l.zip_code,
+        p.geo_point,
+        p.building_name,
+        l.starting_rent,
+        l.net_effective_rent,
+        l.work_value,
+        l.lease_type,
+        l.transaction_type,
+        l.lease_term,
+        l.execution_date,
+        l.commencement_date,
+        l.expiration_date,
+        p.year_built,
+        p.year_renovated,
+        p.building_class,
+        p.current_landlord    
+    FROM
+        lease l
+        JOIN property p ON l.property_id = p.id
+  `;
+  
+  const params = [];
+  const conditions = [];
+  
+  if (city) {
+    conditions.push('UPPER(l.city) LIKE UPPER(?)');
+    params.push(`%${city}%`);
+  }
+  
+  if (state) {
+    conditions.push('UPPER(l.state) = UPPER(?)');
+    params.push(state);
+  }
+  
+  if (conditions.length > 0) {
+    sqlQuery += ' WHERE ' + conditions.join(' AND ');
+  }
+  
+  sqlQuery += ` ORDER BY l.execution_date DESC LIMIT ${parseInt(limit)}`;
+  
+  connection.execute({
+    sqlText: sqlQuery,
+    binds: params,
+    complete: function(err, stmt, rows) {
+      if (err) {
+        res.status(500).json({ error: err.message });
+      } else {
+        res.json({
+          data: removeUnderscores(rows),
+          count: rows ? rows.length : 0,
+          query_params: { city, state, limit }
+        });
       }
     }
   });
@@ -139,6 +263,20 @@ app.get('/api/health', (req, res) => {
 app.get('/api/welcome', (req, res) => {
   const welcomeMessage = "Hello! I'm Cresta, your AI-powered commercial real estate assistant, built with Snowflake and Gemini AI. I can provide you with a list of commercial properties and their details — all within the United States. What would you like to explore today?";
   res.json({ message: welcomeMessage });
+});
+
+// Test endpoint to check building names
+app.get('/api/test-buildings', (req, res) => {
+  connection.execute({
+    sqlText: 'SELECT DISTINCT BUILDING_NAME FROM PROPERTY WHERE BUILDING_NAME IS NOT NULL ORDER BY BUILDING_NAME LIMIT 20',
+    complete: function(err, stmt, rows) {
+      if (err) {
+        res.status(500).json({ error: err.message });
+      } else {
+        res.json({ buildings: rows });
+      }
+    }
+  });
 });
 
 // Parse user input with flexible patterns and grammar tolerance
@@ -169,7 +307,10 @@ const parseUserInput = (message) => {
   }
   
   // Extract building name with flexible patterns
-  const buildingMatch = lowerMessage.match(/(?:details|information|info)\s+(?:of|about|for)\s+(?:the\s+)?([a-zA-Z0-9\s&.-]+(?:\s+building|\s+tower|\s+center|\s+plaza|\s+complex|\s+avenue|\s+street))/i) ||
+  const buildingMatch = lowerMessage.match(/(?:lease)\s+(?:of|for)\s+(?:the\s+)?([a-zA-Z0-9\s&.-]+(?:\s+building|\s+tower|\s+center|\s+plaza|\s+complex|\s+avenue|\s+street))/i) ||
+                       lowerMessage.match(/(?:details|information|info)\s+(?:of|about|for)\s+(?:the\s+)?([a-zA-Z0-9\s&.-]+(?:\s+building|\s+tower|\s+center|\s+plaza|\s+complex|\s+avenue|\s+street))/i) ||
+                       lowerMessage.match(/(?:landlord)\s+(?:of|for)\s+(?:the\s+)?([a-zA-Z0-9\s&.-]+(?:\s+building|\s+tower|\s+center|\s+plaza|\s+complex|\s+avenue|\s+street))/i) ||
+                       lowerMessage.match(/(?:current\s+landlord)\s+(?:of|for)\s+(?:the\s+)?([a-zA-Z0-9\s&.-]+(?:\s+building|\s+tower|\s+center|\s+plaza|\s+complex|\s+avenue|\s+street))/i) ||
                        lowerMessage.match(/(?:year|built|renovated|size|floors).*?(?:of|for)\s+(?:the\s+)?([a-zA-Z0-9\s&.-]+(?:\s+building|\s+tower|\s+center|\s+plaza|\s+complex|\s+avenue|\s+street))/i) ||
                        lowerMessage.match(/(?:year|built|renovated|size|floors).*?(?:of|for)\s+([0-9]+\s+[a-zA-Z\s]+)/i) ||
                        lowerMessage.match(/(?:year)\s+([a-zA-Z0-9\s&.-]+(?:\s+building|\s+tower|\s+center|\s+plaza|\s+complex))\s+(?:built|build)/i) ||
@@ -214,14 +355,18 @@ const parseUserInput = (message) => {
     'was built': 'YEAR_BUILT',
     'landlord': 'CURRENT_LANDLORD',
     'current landlord': 'CURRENT_LANDLORD',
-    'owner': 'CURRENT_LANDLORD'
+    'owner': 'CURRENT_LANDLORD',
+    'landlord': 'CURRENT_LANDLORD'
   };
   
   let specificField = null;
-  for (const [keyword, column] of Object.entries(fieldMap)) {
-    if (lowerMessage.includes(keyword)) {
-      specificField = column;
-      break;
+  // Don't detect specific fields when asking for lease information
+  if (!lowerMessage.includes('lease')) {
+    for (const [keyword, column] of Object.entries(fieldMap)) {
+      if (lowerMessage.includes(keyword)) {
+        specificField = column;
+        break;
+      }
     }
   }
   
@@ -276,28 +421,138 @@ app.post('/api/chat', async (req, res) => {
   let isPropertyList = false;
   let isCityPropertyList = false;
   
+  // Check for landlord detail requests for specific building
+  if (filters.buildingName && (lowerMessage.includes('landlord') || lowerMessage.includes('owner') || lowerMessage.includes('owns')) && 
+      (lowerMessage.includes('details') || lowerMessage.includes('of') || lowerMessage.includes('portfolio') || 
+       lowerMessage.includes('who') || lowerMessage.includes('show') || lowerMessage.includes('tell') || 
+       lowerMessage.includes('information') || lowerMessage.includes('about') || lowerMessage.includes('find'))) {
+    sqlQuery = `
+      SELECT
+          p.current_landlord,
+          p.building_name,
+          p.street_address,
+          p.city,
+          p.state,
+          p.year_built,
+          p.building_class
+      FROM
+          property p
+      WHERE UPPER(p.building_name) LIKE UPPER(?) OR UPPER(p.building_name) LIKE UPPER(?)
+    `;
+    params = [`%${filters.buildingName}%`, `%${filters.buildingName.replace(/building|tower|center|plaza/gi, '').trim()}%`];
+    responseText = `Landlord details for ${filters.buildingName}:`;
+  }
+  // Check for landlord portfolio requests for specific building
+  else if (lowerMessage.includes('landlord') && lowerMessage.includes('portfolio') && filters.buildingName) {
+    sqlQuery = `
+      SELECT
+          p.current_landlord,
+          p.building_name,
+          p.street_address,
+          p.city,
+          p.state,
+          p.year_built,
+          p.building_class,
+          avg(l.adjusted_starting_rent) as average_starting_rent
+      FROM
+          lease l
+          JOIN property p ON l.property_id = p.id
+      WHERE UPPER(p.building_name) LIKE UPPER(?)
+      GROUP BY
+          p.current_landlord, p.building_name, p.street_address, p.city, p.state, p.year_built, p.building_class
+    `;
+    params = [`%${filters.buildingName}%`];
+    responseText = `Landlord portfolio details for ${filters.buildingName}:`;
+  }
+  // Check for general landlord portfolio requests
+  else if (lowerMessage.includes('landlord') && (lowerMessage.includes('portfolio') || lowerMessage.includes('average rent') || lowerMessage.includes('rent'))) {
+    sqlQuery = `
+      SELECT
+          p.current_landlord,
+          p.street_address,
+          avg(l.adjusted_starting_rent) as average_starting_rent
+      FROM
+          lease l
+          JOIN property p ON l.property_id = p.id
+      GROUP BY
+          p.current_landlord, p.street_address
+      ORDER BY average_starting_rent DESC
+      LIMIT 15
+    `;
+    responseText = 'Here are landlord portfolios with average rents:';
+  }
+  // Check for lease and property join requests
+  else if (lowerMessage.includes('lease') && (lowerMessage.includes('properties') || lowerMessage.includes('property')) && 
+      (lowerMessage.includes('join') || lowerMessage.includes('combined') || lowerMessage.includes('together'))) {
+    sqlQuery = `
+      SELECT
+          l.id,
+          l.street_address,
+          l.city,
+          l.state,
+          p.building_name,
+          l.starting_rent,
+          l.net_effective_rent,
+          l.lease_type,
+          l.transaction_type,
+          l.lease_term,
+          p.year_built,
+          p.building_class,
+          p.current_landlord    
+      FROM
+          lease l
+          JOIN property p ON l.property_id = p.id
+      ORDER BY l.execution_date DESC
+      LIMIT 20
+    `;
+    responseText = 'Here are lease and property details combined:';
+  }
+
+  // Check for lease information with city filter
+  else if (lowerMessage.includes('lease') && filters.city) {
+    sqlQuery = `
+      SELECT
+          l.id,
+          l.street_address,
+          l.city,
+          l.state,
+          p.building_name,
+          l.starting_rent,
+          l.net_effective_rent,
+          l.lease_type,
+          l.lease_term,
+          p.building_class
+      FROM
+          lease l
+          JOIN property p ON l.property_id = p.id
+      WHERE UPPER(l.city) LIKE UPPER(?)
+      ORDER BY l.execution_date DESC
+      LIMIT 15
+    `;
+    params = [`%${filters.city}%`];
+    responseText = `Lease information for properties in ${filters.city}:`;
+  }
   // Check for available cities requests
-  if (lowerMessage.includes('what cities are available') || lowerMessage.includes('available cities') ||
-      lowerMessage.includes('cities available') || lowerMessage.includes('show me cities') ||
-      lowerMessage.includes('list of cities') || lowerMessage.includes('which cities')) {
+  else if (lowerMessage.includes('cities') && (lowerMessage.includes('available') || lowerMessage.includes('what') || 
+      lowerMessage.includes('show') || lowerMessage.includes('list') || lowerMessage.includes('which') || 
+      lowerMessage.includes('tell') || lowerMessage.includes('find') || lowerMessage.includes('all'))) {
     sqlQuery = 'SELECT DISTINCT CITY, STATE, COUNT(*) as PROPERTY_COUNT FROM PROPERTY WHERE CITY IS NOT NULL GROUP BY CITY, STATE ORDER BY PROPERTY_COUNT DESC, CITY';
     responseText = 'Here are all the cities available in our commercial real estate database:';
     isPropertyList = true;
   }
   // Check for building class availability requests
-  else if (lowerMessage.includes('building classes are available') || lowerMessage.includes('what building classes') ||
-      lowerMessage.includes('available building class') || lowerMessage.includes('building class available') ||
-      lowerMessage.includes('building classes')) {
+  else if (lowerMessage.includes('building class') && (lowerMessage.includes('available') || lowerMessage.includes('what') || 
+      lowerMessage.includes('show') || lowerMessage.includes('list') || lowerMessage.includes('which') || 
+      lowerMessage.includes('tell') || lowerMessage.includes('find') || lowerMessage.includes('all'))) {
     sqlQuery = 'SELECT DISTINCT BUILDING_CLASS FROM PROPERTY WHERE BUILDING_CLASS IS NOT NULL ORDER BY BUILDING_CLASS';
     responseText = 'Our portfolio features premium commercial properties across multiple building classifications:';
     isPropertyList = true;
   }
   // Check for generic "show me properties" without city specification
-  else if ((lowerMessage.includes('show me properties') || lowerMessage.includes('list of properties') || 
-      lowerMessage.includes('give me list of properties') || lowerMessage.includes('properties list') ||
-      lowerMessage.includes('show me list of properties') || lowerMessage.includes('show me list of all properties') ||
-      lowerMessage.includes('show me all list of properties') || lowerMessage.includes('give me list of all properties') ||
-      lowerMessage.includes('list of all properties') || lowerMessage.includes('all properties')) && !filters.city) {
+  else if (lowerMessage.includes('properties') && !filters.city && 
+      (lowerMessage.includes('show') || lowerMessage.includes('list') || lowerMessage.includes('give') || 
+       lowerMessage.includes('find') || lowerMessage.includes('tell') || lowerMessage.includes('what') || 
+       lowerMessage.includes('all') || lowerMessage.includes('display'))) {
     // Get list of available cities for suggestions
     sqlQuery = 'SELECT DISTINCT CITY FROM PROPERTY WHERE CITY IS NOT NULL ORDER BY CITY LIMIT 15';
     responseText = 'What city would you like to see properties in?';
@@ -323,15 +578,40 @@ app.post('/api/chat', async (req, res) => {
     return;
   }
   // Check for general property list requests with city
-  else if ((lowerMessage.includes('show me properties') || lowerMessage.includes('list of properties') || 
-      lowerMessage.includes('give me list of properties') || lowerMessage.includes('properties list') ||
-      lowerMessage.includes('show me list of properties') || lowerMessage.includes('show me list of all properties') ||
-      lowerMessage.includes('show me all list of properties') || lowerMessage.includes('give me list of all properties') ||
-      lowerMessage.includes('list of all properties') || lowerMessage.includes('all properties')) && filters.city) {
+  else if (lowerMessage.includes('properties') && filters.city && 
+      (lowerMessage.includes('show') || lowerMessage.includes('list') || lowerMessage.includes('give') || 
+       lowerMessage.includes('find') || lowerMessage.includes('tell') || lowerMessage.includes('what') || 
+       lowerMessage.includes('all') || lowerMessage.includes('display'))) {
     sqlQuery = 'SELECT BUILDING_NAME, CITY, STATE FROM PROPERTY WHERE UPPER(CITY) LIKE UPPER(?) ORDER BY BUILDING_NAME';
     params = [`%${filters.city}%`];
     responseText = '';
     isCityPropertyList = true;
+  }
+  // Check for lease-specific building name queries first
+  else if (lowerMessage.includes('lease') && filters.buildingName) {
+    sqlQuery = `
+      SELECT
+          l.id,
+          l.street_address,
+          l.city,
+          l.state,
+          l.zip_code,
+          l.starting_rent,
+          l.net_effective_rent,
+          l.lease_type,
+          l.transaction_type,
+          l.lease_term,
+          l.execution_date,
+          l.commencement_date,
+          l.expiration_date
+      FROM
+          lease l
+          JOIN property p ON l.property_id = p.id
+      WHERE UPPER(p.building_name) LIKE UPPER(?)
+      ORDER BY l.execution_date DESC
+    `;
+    params = [`%${filters.buildingName}%`];
+    responseText = `Lease details for ${filters.buildingName}:`;
   }
   // Priority order: Building Name > Building Class > City > General queries
   else if (filters.buildingName) {
@@ -358,15 +638,45 @@ app.post('/api/chat', async (req, res) => {
     sqlQuery = 'SELECT * FROM PROPERTY WHERE UPPER(CITY) LIKE UPPER(?)';
     params = [`%${filters.city}%`];
     responseText = `Properties in ${filters.city}:`;
-  } else if (lowerMessage.includes('properties') || lowerMessage.includes('buildings')) {
+  } else if ((lowerMessage.includes('properties') || lowerMessage.includes('buildings')) && 
+      (lowerMessage.includes('show') || lowerMessage.includes('list') || lowerMessage.includes('give') || 
+       lowerMessage.includes('find') || lowerMessage.includes('tell') || lowerMessage.includes('what') || 
+       lowerMessage.includes('all') || lowerMessage.includes('display'))) {
     sqlQuery = 'SELECT * FROM PROPERTY LIMIT 10';
     responseText = 'Here are properties in our database:';
-  } else if (lowerMessage.includes('lease')) {
-    sqlQuery = 'SELECT * FROM LEASE LIMIT 10';
-    responseText = 'Here is lease information:';
-  } else if (lowerMessage.includes('rent') || lowerMessage.includes('average rent')) {
-    sqlQuery = 'SELECT AVG(RENT_PSF) as AVG_RENT FROM LEASE WHERE RENT_PSF IS NOT NULL';
-    responseText = 'Here is the average rent per square foot:';
+  } else if ((lowerMessage.includes('lease') || lowerMessage.includes('leases')) && !filters.city && 
+      (lowerMessage.includes('show') || lowerMessage.includes('list') || lowerMessage.includes('give') || 
+       lowerMessage.includes('find') || lowerMessage.includes('tell') || lowerMessage.includes('what') || 
+       lowerMessage.includes('all') || lowerMessage.includes('display') || lowerMessage.includes('recent'))) {
+    sqlQuery = `
+      SELECT
+          l.street_address,
+          l.city,
+          l.state,
+          p.building_name,
+          l.starting_rent,
+          l.net_effective_rent,
+          l.lease_type,
+          l.lease_term,
+          p.building_class
+      FROM
+          lease l
+          JOIN property p ON l.property_id = p.id
+      ORDER BY l.execution_date DESC
+      LIMIT 10
+    `;
+    responseText = 'Here is recent lease information with property details:';
+  } else if ((lowerMessage.includes('rent') || lowerMessage.includes('rental') || lowerMessage.includes('price')) && 
+      (lowerMessage.includes('average') || lowerMessage.includes('show') || lowerMessage.includes('what') || 
+       lowerMessage.includes('tell') || lowerMessage.includes('find') || lowerMessage.includes('get'))) {
+    if (filters.city) {
+      sqlQuery = 'SELECT AVG(l.starting_rent) as AVG_STARTING_RENT, AVG(l.net_effective_rent) as AVG_NET_RENT FROM lease l JOIN property p ON l.property_id = p.id WHERE UPPER(l.city) LIKE UPPER(?)';
+      params = [`%${filters.city}%`];
+      responseText = `Average rent information for ${filters.city}:`;
+    } else {
+      sqlQuery = 'SELECT AVG(starting_rent) as AVG_STARTING_RENT, AVG(net_effective_rent) as AVG_NET_RENT FROM lease WHERE starting_rent IS NOT NULL';
+      responseText = 'Here is the average rent information:';
+    }
   } else {
     return res.json({ response: 'I can help you search for specific buildings, cities, building classes (A, B, C), properties, leases, and rent information. Try: "Show me Class A properties", "Properties in New York", or "What cities are available?"' });
   }
@@ -379,6 +689,7 @@ app.post('/api/chat', async (req, res) => {
   console.log('Original message:', message);
   console.log('Lower message:', lowerMessage);
   console.log('Parsed filters:', filters);
+  console.log('Landlord condition check:', lowerMessage.includes('landlord'), filters.buildingName, (lowerMessage.includes('details') || lowerMessage.includes('of') || lowerMessage.includes('portfolio')));
   console.log('Executing SQL:', sqlQuery);
   console.log('Parameters:', params);
   
@@ -396,13 +707,29 @@ app.post('/api/chat', async (req, res) => {
             const fieldValue = rows[0][filters.specificField];
             if (fieldValue !== undefined) {
               const formattedValue = formatFieldResponse(filters.specificField, fieldValue, rows[0].BUILDING_NAME);
-              res.json({ response: formattedValue, data: [], count: 0 });
+              // Use Gemini to enhance specific field response
+              try {
+                const geminiPrompt = `You are a commercial real estate assistant. The user asked: "${message}" about ${rows[0].BUILDING_NAME}. The answer is: ${formattedValue}. Provide a brief, professional response (1-2 sentences) that presents this information conversationally.`;
+                const enhancedResponse = await callGemini(geminiPrompt);
+                res.json({ response: enhancedResponse, data: [], count: 0 });
+              } catch (error) {
+                console.error('Gemini enhancement failed:', error);
+                res.json({ response: formattedValue, data: [], count: 0 });
+              }
             } else {
-              res.json({ response: `Here are all available details for ${rows[0].BUILDING_NAME}:`, data: rows, count: rows.length });
+              // Use Gemini to enhance building details response
+              try {
+                const dataContext = JSON.stringify(rows[0]);
+                const geminiPrompt = `You are a commercial real estate assistant. Based on this user query: "${message}" and this building data: ${dataContext}, provide a brief, professional response (2-3 sentences) that introduces the building details. Be conversational and helpful.`;
+                const enhancedResponse = await callGemini(geminiPrompt);
+                res.json({ response: enhancedResponse, data: removeUnderscores(rows), count: rows.length });
+              } catch (error) {
+                console.error('Gemini enhancement failed:', error);
+                res.json({ response: `Here are all available details for ${rows[0].BUILDING_NAME}:`, data: removeUnderscores(rows), count: rows.length });
+              }
             }
           } else if (isPropertyList) {
             const count = rows.length;
-            const intro = responseText || `Here are ${count} premium commercial properties in our portfolio.`;
             const list = rows.map((prop, index) => {
               if (prop.BUILDING_CLASS && !prop.BUILDING_NAME) {
                 return `${index + 1}. Class ${prop.BUILDING_CLASS}`;
@@ -414,28 +741,92 @@ app.post('/api/chat', async (req, res) => {
                 return `${index + 1}. ${prop.BUILDING_NAME}`;
               }
             }).join('\n\n');
-            const enhancedResponse = `${intro}\n\n${list}`;
-            res.json({ response: enhancedResponse, data: [], count: rows.length });
+            
+            // Use Gemini to enhance property list response
+            try {
+              const dataContext = JSON.stringify(rows.slice(0, 3));
+              const geminiPrompt = `You are a commercial real estate assistant. Based on this user query: "${message}" and this property data: ${dataContext}, provide a brief, professional response (2-3 sentences) that introduces the ${count} properties found. Be conversational and helpful.`;
+              const enhancedIntro = await callGemini(geminiPrompt);
+              const enhancedResponse = `${enhancedIntro}\n\n${list}`;
+              res.json({ response: enhancedResponse, data: [], count: rows.length });
+            } catch (error) {
+              console.error('Gemini enhancement failed:', error);
+              const intro = responseText || `Here are ${count} premium commercial properties in our portfolio.`;
+              const enhancedResponse = `${intro}\n\n${list}`;
+              res.json({ response: enhancedResponse, data: [], count: rows.length });
+            }
           } else if (isCityPropertyList) {
             const count = rows.length;
-            const intro = `Here are ${count} premium commercial properties in ${filters.city}.`;
             const list = rows.map((prop, index) => 
               `${index + 1}. ${prop.BUILDING_NAME}`
             ).join('\n\n');
-            const enhancedResponse = `${intro}\n\n${list}`;
-            res.json({ response: enhancedResponse, data: [], count: rows.length });
+            
+            // Use Gemini to enhance city property list response
+            try {
+              const dataContext = JSON.stringify(rows.slice(0, 3));
+              const geminiPrompt = `You are a commercial real estate assistant. Based on this user query: "${message}" and this property data in ${filters.city}: ${dataContext}, provide a brief, professional response (2-3 sentences) that introduces the ${count} properties found in ${filters.city}. Be conversational and helpful.`;
+              const enhancedIntro = await callGemini(geminiPrompt);
+              const enhancedResponse = `${enhancedIntro}\n\n${list}`;
+              res.json({ response: enhancedResponse, data: [], count: rows.length });
+            } catch (error) {
+              console.error('Gemini enhancement failed:', error);
+              const intro = `Here are ${count} premium commercial properties in ${filters.city}.`;
+              const enhancedResponse = `${intro}\n\n${list}`;
+              res.json({ response: enhancedResponse, data: [], count: rows.length });
+            }
           } else {
-            res.json({ response: responseText, data: rows, count: rows.length });
+            // Format lease data for better display
+            if (lowerMessage.includes('lease') || lowerMessage.includes('rent')) {
+              const formattedRows = rows.map(row => {
+                if (row.AVG_STARTING_RENT || row.AVG_NET_RENT) {
+                  return {
+                    ...row,
+                    AVG_STARTING_RENT: row.AVG_STARTING_RENT ? `$${parseFloat(row.AVG_STARTING_RENT).toFixed(2)}` : 'N/A',
+                    AVG_NET_RENT: row.AVG_NET_RENT ? `$${parseFloat(row.AVG_NET_RENT).toFixed(2)}` : 'N/A'
+                  };
+                }
+                return row;
+              });
+              // Use Gemini to enhance lease/rent response
+              try {
+                const dataContext = JSON.stringify(formattedRows.slice(0, 3));
+                const geminiPrompt = `You are a commercial real estate assistant. Based on this user query: "${message}" and this lease/rent data: ${dataContext}, provide a brief, professional response (2-3 sentences) that explains what the data shows. Be conversational and helpful.`;
+                const enhancedResponse = await callGemini(geminiPrompt);
+                res.json({ response: enhancedResponse, data: removeUnderscores(formattedRows), count: formattedRows.length });
+              } catch (error) {
+                console.error('Gemini enhancement failed:', error);
+                res.json({ response: responseText, data: removeUnderscores(formattedRows), count: formattedRows.length });
+              }
+            } else {
+              // Use Gemini to enhance response
+              try {
+                const dataContext = JSON.stringify(rows.slice(0, 3)); // First 3 records for context
+                const geminiPrompt = `You are a commercial real estate assistant. Based on this user query: "${message}" and this data: ${dataContext}, provide a brief, professional response (2-3 sentences) that explains what the data shows. Be conversational and helpful.`;
+                const enhancedResponse = await callGemini(geminiPrompt);
+                res.json({ response: enhancedResponse, data: removeUnderscores(rows), count: rows.length });
+              } catch (error) {
+                console.error('Gemini enhancement failed:', error);
+                res.json({ response: responseText, data: removeUnderscores(rows), count: rows.length });
+              }
+            }
           }
         } else {
-          const noDataMessage = filters.buildingName ? 
-            `I couldn't find any information about ${filters.buildingName} in our current portfolio.` :
-            filters.city ? 
-            `I apologize, but we currently don't have any properties available in ${filters.city}.` :
-            filters.buildingClass ? 
-            `I apologize, but Class ${filters.buildingClass} properties are not currently available in our portfolio.` :
-            'I apologize, but I don\'t have any property information available right now.';
-          res.json({ response: noDataMessage, data: [], count: 0 });
+          // Use Gemini to enhance no data found response
+          try {
+            const geminiPrompt = `You are a commercial real estate assistant. The user asked: "${message}" but no data was found. Provide a brief, professional and helpful response (1-2 sentences) explaining that no results were found and suggest alternative searches. Be conversational and supportive.`;
+            const enhancedResponse = await callGemini(geminiPrompt);
+            res.json({ response: enhancedResponse, data: [], count: 0 });
+          } catch (error) {
+            console.error('Gemini enhancement failed:', error);
+            const noDataMessage = filters.buildingName ? 
+              `I couldn't find any information about ${filters.buildingName} in our current portfolio.` :
+              filters.city ? 
+              `I apologize, but we currently don't have any properties available in ${filters.city}.` :
+              filters.buildingClass ? 
+              `I apologize, but Class ${filters.buildingClass} properties are not currently available in our portfolio.` :
+              'I apologize, but I don\'t have any property information available right now.';
+            res.json({ response: noDataMessage, data: [], count: 0 });
+          }
         }
       }
     }

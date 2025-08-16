@@ -203,17 +203,63 @@ const ChatPage = () => {
                   <div className="mt-3 bg-white rounded-xl p-4 shadow-sm border border-gray-200">
                     <div className="flex items-center space-x-2 text-emerald-700 font-medium mb-3">
                       <Home className="w-4 h-4" />
-                      <span>Database Results ({message.data.length} records)</span>
+                      <span>Search Outcome: {message.data.length} results</span>
                     </div>
                     <div className="space-y-2 max-h-64 overflow-y-auto">
                       {message.data.map((item: any, index: number) => (
                         <div key={index} className="p-3 bg-gray-50 rounded-lg text-sm">
-                          {Object.entries(item).map(([key, value]) => (
-                            <div key={key} className="flex justify-between py-1">
-                              <span className="font-medium text-gray-600">{key}:</span>
-                              <span className="text-gray-900">{value?.toString() || 'N/A'}</span>
-                            </div>
-                          ))}
+                          {Object.entries(item).map(([key, value]) => {
+                            const formatValue = (key: string, value: any) => {
+                              if (!value || value === 'N/A') return 'N/A';
+                              const keyLower = key.toLowerCase();
+                              const valueStr = value.toString();
+                              
+                              // Add currency symbol for rent/price fields
+                              if (keyLower.includes('rent') || keyLower.includes('price') || keyLower.includes('cost')) {
+                                const numValue = parseFloat(valueStr);
+                                if (!isNaN(numValue)) {
+                                  return `$${numValue.toLocaleString()}`;
+                                }
+                              }
+                              
+                              // Add "years" for year fields (but not for actual year values like 1995)
+                              if ((keyLower.includes('year') && !keyLower.includes('built') && !keyLower.includes('renovated')) || keyLower.includes('age')) {
+                                const numValue = parseFloat(valueStr);
+                                if (!isNaN(numValue) && numValue < 200) { // Age/duration, not actual year
+                                  return `${numValue} years`;
+                                }
+                              }
+                              
+                              // Add time units for lease term
+                              if (keyLower.includes('lease term') || keyLower.includes('term')) {
+                                const numValue = parseFloat(valueStr);
+                                if (!isNaN(numValue)) {
+                                  if (numValue === 1) {
+                                    return `${numValue} year`;
+                                  } else if (numValue < 12) {
+                                    return `${numValue} years`;
+                                  } else {
+                                    const years = Math.floor(numValue / 12);
+                                    const months = numValue % 12;
+                                    if (months === 0) {
+                                      return years === 1 ? `${years} year` : `${years} years`;
+                                    } else {
+                                      return `${years} years ${months} months`;
+                                    }
+                                  }
+                                }
+                              }
+                              
+                              return valueStr;
+                            };
+                            
+                            return (
+                              <div key={key} className="flex justify-between py-1">
+                                <span className="font-medium text-gray-600">{key}:</span>
+                                <span className="text-gray-900">{formatValue(key, value)}</span>
+                              </div>
+                            );
+                          })}
                         </div>
                       ))}
                     </div>
