@@ -290,14 +290,27 @@ export default function handler(req, res) {
       });
       return;
     }
-    else if (lowerMessage.includes('properties') && filters.city && 
-        (lowerMessage.includes('show') || lowerMessage.includes('list') || lowerMessage.includes('give') || 
-         lowerMessage.includes('find') || lowerMessage.includes('tell') || lowerMessage.includes('what') || 
-         lowerMessage.includes('all') || lowerMessage.includes('display'))) {
-      sqlQuery = 'SELECT BUILDING_NAME, CITY, STATE FROM PROPERTY WHERE UPPER(CITY) LIKE UPPER(?) ORDER BY BUILDING_NAME';
-      params = [`%${filters.city}%`];
-      responseText = '';
-      isCityPropertyList = true;
+    else if (lowerMessage.includes('properties') && (filters.city || lowerMessage.includes(' in '))) {
+      // Extract city from "Properties in [City]" or use parsed city
+      let cityName = filters.city;
+      if (!cityName && lowerMessage.includes(' in ')) {
+        const cityMatch = lowerMessage.match(/properties\s+in\s+([a-zA-Z\s]+)/i);
+        if (cityMatch) {
+          cityName = cityMatch[1].trim();
+        }
+      }
+      
+      if (cityName) {
+        sqlQuery = 'SELECT BUILDING_NAME, CITY, STATE FROM PROPERTY WHERE UPPER(CITY) LIKE UPPER(?) ORDER BY BUILDING_NAME';
+        params = [`%${cityName}%`];
+        responseText = `Properties in ${cityName}:`;
+        isCityPropertyList = true;
+      } else {
+        // Fallback to generic property list
+        sqlQuery = 'SELECT BUILDING_NAME, CITY, STATE FROM PROPERTY WHERE BUILDING_NAME IS NOT NULL ORDER BY BUILDING_NAME LIMIT 10';
+        responseText = 'Here are some properties:';
+        isPropertyList = true;
+      }
     }
     else if (filters.buildingName) {
       sqlQuery = 'SELECT * FROM PROPERTY WHERE UPPER(BUILDING_NAME) LIKE UPPER(?) OR UPPER(STREET_ADDRESS) LIKE UPPER(?)';
@@ -405,14 +418,17 @@ export default function handler(req, res) {
                   `${index + 1}. ${prop.BUILDING_NAME}`
                 ).join('\n\n');
                 
+                // Extract city name for response
+                const cityName = rows[0]?.CITY || filters.city || 'the selected city';
+                
                 try {
                   const dataContext = JSON.stringify(rows.slice(0, 3));
-                  const geminiPrompt = `You are a commercial real estate assistant. Based on this user query: "${message}" and this property data in ${filters.city}: ${dataContext}, provide a brief, professional response (2-3 sentences) that introduces the ${count} properties found in ${filters.city}. Be conversational and helpful.`;
+                  const geminiPrompt = `You are a commercial real estate assistant. Based on this user query: "${message}" and this property data in ${cityName}: ${dataContext}, provide a brief, professional response (2-3 sentences) that introduces the ${count} properties found in ${cityName}. Be conversational and helpful.`;
                   const enhancedIntro = await callGemini(geminiPrompt);
-                  const enhancedResponse = enhancedIntro ? `${enhancedIntro}\n\n${list}` : `Here are ${count} premium commercial properties in ${filters.city}.\n\n${list}`;
+                  const enhancedResponse = enhancedIntro ? `${enhancedIntro}\n\n${list}` : `Here are ${count} premium commercial properties in ${cityName}.\n\n${list}`;
                   res.json({ response: enhancedResponse, data: [], count: rows.length });
                 } catch (error) {
-                  const intro = `Here are ${count} premium commercial properties in ${filters.city}.`;
+                  const intro = `Here are ${count} premium commercial properties in ${cityName}.`;
                   const enhancedResponse = `${intro}\n\n${list}`;
                   res.json({ response: enhancedResponse, data: [], count: rows.length });
                 }
