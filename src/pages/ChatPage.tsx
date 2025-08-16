@@ -120,17 +120,93 @@ const ChatPage = () => {
 
   const handleQuickQuestion = (question: string) => {
     setInputMessage(question);
-    // Auto-send the suggestion
-    setTimeout(() => {
-      handleSendMessage();
+    // Auto-send the suggestion immediately
+    setTimeout(async () => {
+      const newMessage: Message = {
+        id: Date.now().toString(),
+        type: 'user',
+        content: question,
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, newMessage]);
+      setInputMessage('');
+      setIsTyping(true);
+      
+      try {
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: question })
+        });
+        
+        const data = await response.json();
+        
+        const botResponse: Message = {
+          id: (Date.now() + 1).toString(),
+          type: 'bot',
+          content: data.response || 'Sorry, there was an error.',
+          timestamp: new Date(),
+          data: data.data || [],
+          suggestions: data.suggestions,
+          showCityPopup: data.showCityPopup
+        };
+        
+        setMessages(prev => [...prev, botResponse]);
+        
+        if (data.showCityPopup && data.suggestions) {
+          setAvailableCities(data.suggestions);
+          setShowCityPopup(true);
+        }
+      } catch (error) {
+        console.error('Error:', error);
+      }
+      
+      setIsTyping(false);
     }, 100);
   };
   
   const handleCitySelect = (city: string) => {
     setShowCityPopup(false);
-    setInputMessage(`Properties in ${city}`);
-    setTimeout(() => {
-      handleSendMessage();
+    const cityQuery = `Properties in ${city}`;
+    setInputMessage(cityQuery);
+    
+    // Auto-send city selection immediately
+    setTimeout(async () => {
+      const newMessage: Message = {
+        id: Date.now().toString(),
+        type: 'user',
+        content: cityQuery,
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, newMessage]);
+      setInputMessage('');
+      setIsTyping(true);
+      
+      try {
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: cityQuery })
+        });
+        
+        const data = await response.json();
+        
+        const botResponse: Message = {
+          id: (Date.now() + 1).toString(),
+          type: 'bot',
+          content: data.response || 'Sorry, there was an error.',
+          timestamp: new Date(),
+          data: data.data || []
+        };
+        
+        setMessages(prev => [...prev, botResponse]);
+      } catch (error) {
+        console.error('Error:', error);
+      }
+      
+      setIsTyping(false);
     }, 100);
   };
 

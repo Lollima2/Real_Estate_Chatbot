@@ -133,6 +133,20 @@ export default function handler(req, res) {
         });
       });
       return;
+    } else if (lowerMessage.includes('properties') && lowerMessage.includes(' in ')) {
+      // Extract city name from "Properties in [City]" query
+      const cityMatch = lowerMessage.match(/properties\s+in\s+([a-zA-Z\s]+)/i);
+      if (cityMatch) {
+        const cityName = cityMatch[1].trim();
+        sqlQuery = 'SELECT BUILDING_NAME, CITY, STATE FROM PROPERTY WHERE UPPER(CITY) LIKE UPPER(?) ORDER BY BUILDING_NAME LIMIT 20';
+        params = [`%${cityName}%`];
+        responseText = `Properties in ${cityName}:`;
+        isPropertyList = true;
+      } else {
+        sqlQuery = 'SELECT BUILDING_NAME, CITY, STATE FROM PROPERTY WHERE BUILDING_NAME IS NOT NULL ORDER BY BUILDING_NAME LIMIT 10';
+        responseText = 'Here are some properties:';
+        isPropertyList = true;
+      }
     } else if (lowerMessage.includes('properties')) {
       sqlQuery = 'SELECT BUILDING_NAME, CITY, STATE FROM PROPERTY WHERE BUILDING_NAME IS NOT NULL ORDER BY BUILDING_NAME LIMIT 10';
       responseText = 'Here are some properties:';
