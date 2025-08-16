@@ -94,23 +94,33 @@ const parseUserInput = (message) => {
 };
 
 module.exports = async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  try {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    
+    if (req.method === 'OPTIONS') {
+      return res.status(200).end();
+    }
+    
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
 
-  const { message } = req.body || {};
-  
-  if (!message) {
-    return res.status(400).json({ error: 'Message is required' });
-  }
+    const { message } = req.body || {};
+    
+    if (!message) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    // Check environment variables
+    const requiredEnvVars = ['SNOWFLAKE_ACCOUNT', 'SNOWFLAKE_USERNAME', 'SNOWFLAKE_PASSWORD', 'SNOWFLAKE_DATABASE', 'SNOWFLAKE_SCHEMA', 'SNOWFLAKE_WAREHOUSE'];
+    const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+    
+    if (missingVars.length > 0) {
+      console.error('Missing environment variables:', missingVars);
+      return res.status(500).json({ error: `Missing environment variables: ${missingVars.join(', ')}` });
+    }
 
   const conn = initConnection();
   const lowerMessage = message.toLowerCase();
@@ -167,7 +177,8 @@ module.exports = async (req, res) => {
     return new Promise((resolve) => {
       conn.connect((err) => {
         if (err) {
-          res.status(500).json({ error: err.message });
+          console.error('Snowflake connection error (cities query):', err);
+          res.status(500).json({ error: `Database connection failed: ${err.message}` });
           resolve();
           return;
         }
@@ -176,7 +187,8 @@ module.exports = async (req, res) => {
           sqlText: sqlQuery,
           complete: function(err, stmt, rows) {
             if (err) {
-              res.status(500).json({ error: err.message });
+              console.error('SQL execution error (cities query):', err);
+              res.status(500).json({ error: `Query failed: ${err.message}` });
             } else {
               const cities = rows ? rows.map(row => row.CITY) : [];
               res.json({ 
@@ -267,7 +279,8 @@ module.exports = async (req, res) => {
   return new Promise((resolve) => {
     conn.connect((err) => {
       if (err) {
-        res.status(500).json({ error: err.message });
+        console.error('Snowflake connection error:', err);
+        res.status(500).json({ error: `Database connection failed: ${err.message}` });
         resolve();
         return;
       }
@@ -277,7 +290,8 @@ module.exports = async (req, res) => {
         binds: params,
         complete: async function(err, stmt, rows) {
           if (err) {
-            res.status(500).json({ error: err.message });
+            console.error('SQL execution error:', err);
+            res.status(500).json({ error: `Query failed: ${err.message}` });
             resolve();
           } else {
             if (rows && rows.length > 0) {
@@ -376,4 +390,8 @@ module.exports = async (req, res) => {
       });
     });
   });
+  } catch (error) {
+    console.error('Unexpected error in chat API:', error);
+    return res.status(500).json({ error: `Server error: ${error.message}` });
+  }
 };
