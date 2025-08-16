@@ -77,7 +77,9 @@ const parseUserInput = (message) => {
                        lowerMessage.match(/(?:details|information|info)\s+(?:of|about|for)\s+(?:the\s+)?([a-zA-Z0-9\s&.-]+(?:\s+building|\s+tower|\s+center|\s+plaza|\s+complex|\s+avenue|\s+street))/i) ||
                        lowerMessage.match(/(?:landlord)\s+(?:of|for)\s+(?:the\s+)?([a-zA-Z0-9\s&.-]+(?:\s+building|\s+tower|\s+center|\s+plaza|\s+complex|\s+avenue|\s+street))/i) ||
                        lowerMessage.match(/(?:current\s+landlord)\s+(?:of|for)\s+(?:the\s+)?([a-zA-Z0-9\s&.-]+(?:\s+building|\s+tower|\s+center|\s+plaza|\s+complex|\s+avenue|\s+street))/i) ||
-                       lowerMessage.match(/(?:the\s+)?([a-zA-Z0-9\s&.-]+(?:\s+building|\s+tower|\s+center|\s+plaza|\s+complex|\s+avenue|\s+street))/i);
+                       lowerMessage.match(/(?:show|details|information)\s+(?:me\s+)?(?:of|about)?\s*([0-9]+\s+[a-zA-Z\s]+(?:ave|avenue|st|street|rd|road|blvd|boulevard)\s*[a-zA-Z]*)/i) ||
+                       lowerMessage.match(/(?:the\s+)?([a-zA-Z0-9\s&.-]+(?:\s+building|\s+tower|\s+center|\s+plaza|\s+complex|\s+avenue|\s+street))/i) ||
+                       lowerMessage.match(/([0-9]+\s+[a-zA-Z\s]+(?:ave|avenue|st|street|rd|road|blvd|boulevard)\s*[a-zA-Z]*)/i);
   const buildingName = buildingMatch ? buildingMatch[1].trim() : null;
   
   const isDetailRequest = lowerMessage.includes('detail') || lowerMessage.includes('details') || 
@@ -187,6 +189,11 @@ module.exports = async (req, res) => {
     params = [`%${filters.city}%`];
     responseText = '';
     isCityPropertyList = true;
+  }
+  else if (filters.buildingName) {
+    sqlQuery = 'SELECT * FROM PROPERTY WHERE UPPER(BUILDING_NAME) LIKE UPPER(?) OR UPPER(STREET_ADDRESS) LIKE UPPER(?)';
+    params = [`%${filters.buildingName}%`, `%${filters.buildingName}%`];
+    responseText = `Here are the details for ${filters.buildingName}:`;
   }
   else if (filters.city) {
     sqlQuery = 'SELECT * FROM PROPERTY WHERE UPPER(CITY) LIKE UPPER(?)';
