@@ -133,6 +133,7 @@ module.exports = async (req, res) => {
   let isCityPropertyList = false;
 
   // Comprehensive query logic matching server.js
+  // Check for landlord detail requests for specific building
   if (filters.buildingName && (lowerMessage.includes('landlord') || lowerMessage.includes('owner') || lowerMessage.includes('owns')) && 
       (lowerMessage.includes('details') || lowerMessage.includes('of') || lowerMessage.includes('portfolio') || 
        lowerMessage.includes('who') || lowerMessage.includes('show') || lowerMessage.includes('tell') || 
@@ -153,6 +154,72 @@ module.exports = async (req, res) => {
     params = [`%${filters.buildingName}%`, `%${filters.buildingName.replace(/building|tower|center|plaza/gi, '').trim()}%`];
     responseText = `Landlord details for ${filters.buildingName}:`;
   }
+  // Check for landlord portfolio requests for specific building
+  else if (lowerMessage.includes('landlord') && lowerMessage.includes('portfolio') && filters.buildingName) {
+    sqlQuery = `
+      SELECT
+          p.current_landlord,
+          p.building_name,
+          p.street_address,
+          p.city,
+          p.state,
+          p.year_built,
+          p.building_class,
+          avg(l.adjusted_starting_rent) as average_starting_rent
+      FROM
+          lease l
+          JOIN property p ON l.property_id = p.id
+      WHERE UPPER(p.building_name) LIKE UPPER(?)
+      GROUP BY
+          p.current_landlord, p.building_name, p.street_address, p.city, p.state, p.year_built, p.building_class
+    `;
+    params = [`%${filters.buildingName}%`];
+    responseText = `Landlord portfolio details for ${filters.buildingName}:`;
+  }
+  // Check for general landlord portfolio requests
+  else if (lowerMessage.includes('landlord') && (lowerMessage.includes('portfolio') || lowerMessage.includes('average rent') || lowerMessage.includes('rent'))) {
+    sqlQuery = `
+      SELECT
+          p.current_landlord,
+          p.street_address,
+          avg(l.adjusted_starting_rent) as average_starting_rent
+      FROM
+          lease l
+          JOIN property p ON l.property_id = p.id
+      GROUP BY
+          p.current_landlord, p.street_address
+      ORDER BY average_starting_rent DESC
+      LIMIT 15
+    `;
+    responseText = 'Here are landlord portfolios with average rents:';
+  }
+  // Check for lease and property join requests
+  else if (lowerMessage.includes('lease') && (lowerMessage.includes('properties') || lowerMessage.includes('property')) && 
+      (lowerMessage.includes('join') || lowerMessage.includes('combined') || lowerMessage.includes('together'))) {
+    sqlQuery = `
+      SELECT
+          l.id,
+          l.street_address,
+          l.city,
+          l.state,
+          p.building_name,
+          l.starting_rent,
+          l.net_effective_rent,
+          l.lease_type,
+          l.transaction_type,
+          l.lease_term,
+          p.year_built,
+          p.building_class,
+          p.current_landlord    
+      FROM
+          lease l
+          JOIN property p ON l.property_id = p.id
+      ORDER BY l.execution_date DESC
+      LIMIT 20
+    `;
+    responseText = 'Here are lease and property details combined:';
+  }
+
   else if (lowerMessage.includes('cities') && (lowerMessage.includes('available') || lowerMessage.includes('what') || 
       lowerMessage.includes('show') || lowerMessage.includes('list') || lowerMessage.includes('which') || 
       lowerMessage.includes('tell') || lowerMessage.includes('find') || lowerMessage.includes('all'))) {
@@ -236,6 +303,56 @@ module.exports = async (req, res) => {
        lowerMessage.includes('all') || lowerMessage.includes('display'))) {
     sqlQuery = 'SELECT * FROM PROPERTY LIMIT 10';
     responseText = 'Here are properties in our database:';
+  }
+  // Check for lease-specific building name queries first
+  else if (lowerMessage.includes('lease') && filters.buildingName) {
+    sqlQuery = `
+      SELECT
+          l.id,
+          l.street_address,
+          l.city,
+          l.state,
+          l.zip_code,
+          l.starting_rent,
+          l.net_effective_rent,
+          l.lease_type,
+          l.transaction_type,
+          l.lease_term,
+          l.execution_date,
+          l.commencement_date,
+          l.expiration_date
+      FROM
+          lease l
+          JOIN property p ON l.property_id = p.id
+      WHERE UPPER(p.building_name) LIKE UPPER(?)
+      ORDER BY l.execution_date DESC
+    `;
+    params = [`%${filters.buildingName}%`];
+    responseText = `Lease details for ${filters.buildingName}:`;
+  }
+  // Check for lease information with city filter
+  else if (lowerMessage.includes('lease') && filters.city) {
+    sqlQuery = `
+      SELECT
+          l.id,
+          l.street_address,
+          l.city,
+          l.state,
+          p.building_name,
+          l.starting_rent,
+          l.net_effective_rent,
+          l.lease_type,
+          l.lease_term,
+          p.building_class
+      FROM
+          lease l
+          JOIN property p ON l.property_id = p.id
+      WHERE UPPER(l.city) LIKE UPPER(?)
+      ORDER BY l.execution_date DESC
+      LIMIT 15
+    `;
+    params = [`%${filters.city}%`];
+    responseText = `Lease information for properties in ${filters.city}:`;
   }
   else if ((lowerMessage.includes('lease') || lowerMessage.includes('leases')) && !filters.city && 
       (lowerMessage.includes('show') || lowerMessage.includes('list') || lowerMessage.includes('give') || 
