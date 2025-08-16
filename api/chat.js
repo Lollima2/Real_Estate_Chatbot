@@ -99,6 +99,40 @@ export default function handler(req, res) {
       sqlQuery = 'SELECT DISTINCT CITY, STATE, COUNT(*) as PROPERTY_COUNT FROM PROPERTY WHERE CITY IS NOT NULL GROUP BY CITY, STATE ORDER BY PROPERTY_COUNT DESC, CITY LIMIT 20';
       responseText = 'Here are cities available in our database:';
       isPropertyList = true;
+    } else if (lowerMessage.includes('properties') && !lowerMessage.includes(' in ')) {
+      // Show city popup for generic property requests
+      sqlQuery = 'SELECT DISTINCT CITY FROM PROPERTY WHERE CITY IS NOT NULL ORDER BY CITY LIMIT 15';
+      responseText = 'What city would you like to see properties in?';
+      
+      connection.connect((err) => {
+        if (err) {
+          console.error('Snowflake connection error:', err);
+          res.status(500).json({ error: `Database connection failed: ${err.message}` });
+          resolve();
+          return;
+        }
+        
+        connection.execute({
+          sqlText: sqlQuery,
+          complete: function(err, stmt, rows) {
+            if (err) {
+              console.error('SQL execution error:', err);
+              res.status(500).json({ error: `Query failed: ${err.message}` });
+            } else {
+              const cities = rows ? rows.map(row => row.CITY) : [];
+              res.json({ 
+                response: responseText, 
+                data: [], 
+                count: 0,
+                suggestions: cities,
+                showCityPopup: true
+              });
+            }
+            resolve();
+          }
+        });
+      });
+      return;
     } else if (lowerMessage.includes('properties')) {
       sqlQuery = 'SELECT BUILDING_NAME, CITY, STATE FROM PROPERTY WHERE BUILDING_NAME IS NOT NULL ORDER BY BUILDING_NAME LIMIT 10';
       responseText = 'Here are some properties:';
