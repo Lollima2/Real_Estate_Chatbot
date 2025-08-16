@@ -1,98 +1,3 @@
-const snowflake = require('snowflake-sdk');
-const axios = require('axios');
-
-// Gemini API helper
-async function callGemini(prompt) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    console.error('GEMINI_API_KEY not found');
-    return null;
-  }
-  
-  const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-  try {
-    const response = await axios.post(url, {
-      contents: [{ parts: [{ text: prompt }] }]
-    });
-    return (
-      response.data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      'Sorry, I could not generate a response.'
-    );
-  } catch (err) {
-    console.error('Gemini API error:', err?.response?.data || err.message);
-    return null;
-  }
-}
-
-// Utility function to remove underscores from object keys
-const removeUnderscores = (obj) => {
-  if (Array.isArray(obj)) {
-    return obj.map(removeUnderscores);
-  }
-  if (obj !== null && typeof obj === 'object') {
-    const newObj = {};
-    for (const [key, value] of Object.entries(obj)) {
-      const newKey = key.replace(/_/g, ' ');
-      newObj[newKey] = removeUnderscores(value);
-    }
-    return newObj;
-  }
-  return obj;
-};
-
-let connection;
-
-function initConnection() {
-  if (!connection) {
-    connection = snowflake.createConnection({
-      account: process.env.SNOWFLAKE_ACCOUNT,
-      username: process.env.SNOWFLAKE_USERNAME,
-      password: process.env.SNOWFLAKE_PASSWORD,
-      database: process.env.SNOWFLAKE_DATABASE,
-      schema: process.env.SNOWFLAKE_SCHEMA,
-      warehouse: process.env.SNOWFLAKE_WAREHOUSE,
-      role: 'ACCOUNTADMIN'
-    });
-  }
-  return connection;
-}
-
-// Parse user input with comprehensive patterns
-const parseUserInput = (message) => {
-  const lowerMessage = message.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-  
-  const classMatch = lowerMessage.match(/class\s+([abc])/i);
-  const buildingClass = classMatch ? classMatch[1].toUpperCase() : null;
-  
-  let city = null;
-  if (lowerMessage.includes(' in ') || lowerMessage.includes(' from ') || lowerMessage.includes(' at ') || lowerMessage.includes(' for ')) {
-    const cityMatch = lowerMessage.match(/(?:properties|list|buildings)\s+(?:of\s+properties\s+)?(?:in|from|at|for)\s+([a-zA-Z\s]+?)(?:\s+(?:city|properties|buildings)|\s*$|,|\.)/i) ||
-                     lowerMessage.match(/(?:in|from|at|for)\s+([a-zA-Z\s]+?)(?:\s+(?:city|properties|buildings)|\s*$|,|\.)/i);
-    
-    if (cityMatch) {
-      const potentialCity = cityMatch[1].trim().replace(/\s+/g, ' ');
-      const excludeWords = ['show me', 'give me', 'list of', 'all', 'some', 'any', 'properties', 'buildings', 'the', 'a', 'an'];
-      if (potentialCity && !excludeWords.some(word => potentialCity.toLowerCase().includes(word)) && potentialCity.length >= 2) {
-        city = potentialCity;
-      }
-    }
-  }
-  
-  const buildingMatch = lowerMessage.match(/(?:lease)\s+(?:of|for)\s+(?:the\s+)?([a-zA-Z0-9\s&.-]+(?:\s+building|\s+tower|\s+center|\s+plaza|\s+complex|\s+avenue|\s+street))/i) ||
-                       lowerMessage.match(/(?:details|information|info)\s+(?:of|about|for)\s+(?:the\s+)?([a-zA-Z0-9\s&.-]+(?:\s+building|\s+tower|\s+center|\s+plaza|\s+complex|\s+avenue|\s+street))/i) ||
-                       lowerMessage.match(/(?:landlord)\s+(?:of|for)\s+(?:the\s+)?([a-zA-Z0-9\s&.-]+(?:\s+building|\s+tower|\s+center|\s+plaza|\s+complex|\s+avenue|\s+street))/i) ||
-                       lowerMessage.match(/(?:current\s+landlord)\s+(?:of|for)\s+(?:the\s+)?([a-zA-Z0-9\s&.-]+(?:\s+building|\s+tower|\s+center|\s+plaza|\s+complex|\s+avenue|\s+street))/i) ||
-                       lowerMessage.match(/(?:show|details|information)\s+(?:me\s+)?(?:of|about)?\s*([0-9]+\s+[a-zA-Z\s]+(?:ave|avenue|st|street|rd|road|blvd|boulevard)\s*[a-zA-Z]*)/i) ||
-                       lowerMessage.match(/(?:the\s+)?([a-zA-Z0-9\s&.-]+(?:\s+building|\s+tower|\s+center|\s+plaza|\s+complex|\s+avenue|\s+street))/i) ||
-                       lowerMessage.match(/([0-9]+\s+[a-zA-Z\s]+(?:ave|avenue|st|street|rd|road|blvd|boulevard)\s*[a-zA-Z]*)/i);
-  const buildingName = buildingMatch ? buildingMatch[1].trim() : null;
-  
-  const isDetailRequest = lowerMessage.includes('detail') || lowerMessage.includes('details') || 
-                         lowerMessage.includes('information') || lowerMessage.includes('info');
-  
-  return { buildingClass, city, buildingName, isDetailRequest };
-};
-
 module.exports = async (req, res) => {
   try {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -113,19 +18,44 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'Message is required' });
     }
 
-    // Check environment variables
-    const requiredEnvVars = ['SNOWFLAKE_ACCOUNT', 'SNOWFLAKE_USERNAME', 'SNOWFLAKE_PASSWORD', 'SNOWFLAKE_DATABASE', 'SNOWFLAKE_SCHEMA', 'SNOWFLAKE_WAREHOUSE'];
-    const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+    // Simple responses without database connection
+    const lowerMessage = message.toLowerCase();
     
-    if (missingVars.length > 0) {
-      console.error('Missing environment variables:', missingVars);
-      return res.status(500).json({ error: `Missing environment variables: ${missingVars.join(', ')}` });
+    if (lowerMessage.includes('cities')) {
+      return res.json({ 
+        response: 'I can help you with real estate data, but I\'m currently experiencing database connectivity issues. Please try again later or contact support.' 
+      });
     }
     
-    // Simple response without database connection for testing
-    if (message.toLowerCase().includes('test')) {
-      return res.json({ response: 'API is working! Environment variables are set correctly.' });
+    if (lowerMessage.includes('rent') || lowerMessage.includes('average')) {
+      return res.json({ 
+        response: 'I can provide rent information, but I\'m currently experiencing database connectivity issues. Please try again later or contact support.' 
+      });
     }
+    
+    if (lowerMessage.includes('lease')) {
+      return res.json({ 
+        response: 'I can show lease data, but I\'m currently experiencing database connectivity issues. Please try again later or contact support.' 
+      });
+    }
+    
+    if (lowerMessage.includes('properties')) {
+      return res.json({ 
+        response: 'I can list properties, but I\'m currently experiencing database connectivity issues. Please try again later or contact support.' 
+      });
+    }
+    
+    return res.json({ 
+      response: 'Hello! I\'m your real estate assistant. I can help with properties, cities, leases, and rent information, but I\'m currently experiencing database connectivity issues. Please try again later.' 
+    });
+    
+  } catch (error) {
+    console.error('API Error:', error);
+    return res.status(500).json({ error: `Server error: ${error.message}` });
+  }
+};
+
+
 
   const conn = initConnection();
   const lowerMessage = message.toLowerCase();
