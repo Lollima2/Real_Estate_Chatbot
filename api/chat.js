@@ -121,6 +121,11 @@ module.exports = async (req, res) => {
       console.error('Missing environment variables:', missingVars);
       return res.status(500).json({ error: `Missing environment variables: ${missingVars.join(', ')}` });
     }
+    
+    // Simple response without database connection for testing
+    if (message.toLowerCase().includes('test')) {
+      return res.json({ response: 'API is working! Environment variables are set correctly.' });
+    }
 
   const conn = initConnection();
   const lowerMessage = message.toLowerCase();
