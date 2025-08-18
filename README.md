@@ -1,8 +1,4 @@
-Got it 👍 You want your **Real Estate Chatbot project** to have the same **WCHL-style detailed GitHub README** (like the BukNest one you showed), but tailored for your real estate app.
 
-Here’s a **WCHL-format README** adapted for your Real Estate project:
-
----
 
 🏡 Real Estate Insights Chatbot
 
