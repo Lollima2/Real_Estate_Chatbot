@@ -29,20 +29,14 @@ By integrating **AI-driven chat** with **Snowflake-powered U.S. real estate data
 
 2. **Dynamic Property Search**
 
-   * Filter by **city, state, price range, bedrooms, bathrooms, property type**.
-   * Supports **comparisons across neighborhoods**.
+   * Filter by **city, state, property type**.
 
-3. **Neighborhood Insights**
-
-   * Access **crime rate trends, school ratings, and price averages**.
-   * Compare neighborhoods side by side.
-
-4. **Responsive Chat UI**
+3. **Responsive Chat UI**
 
    * Built with **React + TailwindCSS**.
-   * Mobile and desktop optimized.
+   * Desktop optimized.
 
-5. **Secure & Scalable Backend**
+4. **Secure & Scalable Backend**
 
    * **Express.js** server handles API requests.
    * **Snowflake SDK** powers real-time queries.
