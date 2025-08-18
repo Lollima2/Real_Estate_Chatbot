@@ -11,6 +11,57 @@ By integrating **AI-driven chat** with **Snowflake-powered U.S. real estate data
 
 ---
 
+❓ Problem We’re Trying to Solve
+
+Real estate data is often:
+
+Scattered across multiple listing websites, making it difficult to compare properties.
+
+Complex for regular buyers who don’t understand raw numbers or datasets.
+
+Static – traditional listing sites don’t let you ask questions like a conversation.
+
+Outdated – many datasets are delayed or incomplete, especially in emerging markets.
+
+🏠 Our chatbot bridges the gap by making property insights as easy as chatting with a friend.
+
+---
+
+📊 Industry Stats
+
+The global real estate market is valued at $6.8 trillion in 2025 and projected to keep growing.
+
+AI in real estate is expected to reach $733 billion by 2030, driven by smart property search and predictive analytics.
+
+In the Philippines, property is the second-largest household investment after education, yet:
+
+Only 40% of buyers trust current online listings as accurate.
+
+There’s no centralized AI-powered property insights system for the local market.
+
+<img width="834" height="606" alt="image" src="https://github.com/user-attachments/assets/c06e9ff9-e415-4286-8b19-58952b0eb7cf" />
+https://vocal.media/education/will-real-estate-tokenization-revolutionize-the-industry
+
+
+---
+
+🌏 Opportunities for PH Real Estate Data
+
+Transparency & Trust – AI-driven summaries can help fix distrust in PH property listings.
+
+Market Growth – With rapid urbanization, PH real estate is a ₱6-trillion market by 2030.
+
+Foreign Investors – Demand for clear, data-backed property insights in Metro Manila, Cebu, and Davao.
+
+Future Expansion – Integrating mortgage rates, land use data, and rental yields into a conversational platform.
+
+🚀 Long-term vision: Localized AI real estate chatbot for the Philippine market with BIR, Pag-IBIG, and property tax data integration.
+
+<img width="844" height="611" alt="image" src="https://github.com/user-attachments/assets/178935de-6d0b-46b6-9a49-bc4f3e099bb6" />
+https://forbesasiacustom.com/the-philippines-a-roadmap-to-success/#:~:text=The%20Philippines%E2%80%99%20real%20estate%20market,story%20architectural
+
+---
+
 🌟 Core Philosophy
 
 * **Accessible** – Everyone can query real estate data without technical barriers.
