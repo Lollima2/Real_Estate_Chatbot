@@ -24,7 +24,7 @@ By integrating **AI-driven chat** with **Snowflake-powered U.S. real estate data
 
 1. **Conversational Querying**
 
-   * Ask natural language questions like *“Show me 3-bedroom houses in Austin under \$500k”*.
+   * Ask natural language questions like *“Show me 3-bedroom houses*.
    * Get **instant responses** powered by Snowflake datasets.
 
 2. **Dynamic Property Search**
