@@ -85,9 +85,6 @@ Listings Table
 | id             | uuid    | Primary key        |
 | city           | text    | City name          |
 | state          | text    | State code         |
-| price          | numeric | Property price     |
-| bedrooms       | int     | No. of bedrooms    |
-| bathrooms      | int     | No. of bathrooms   |
 | property\_type | text    | House, Condo, etc. |
 | neighborhood   | text    | Neighborhood name  |
 | listed\_at     | date    | Listing date       |
