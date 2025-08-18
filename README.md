@@ -1,7 +1,9 @@
 
 
 🏡 Real Estate Insights Chatbot
-<img width="236" height="238" alt="image" src="https://github.com/user-attachments/assets/fd9b367d-3d9c-475d-b1d0-0771fc80fad3" />
+
+
+<img width="236" height="238" alt="Screenshot_2025-08-18_215011-removebg-preview" src="https://github.com/user-attachments/assets/2d9ffa3d-57f9-4986-b91a-207d40eae384" />
 
 
 A **full-stack platform** designed to help **homebuyers, renters, investors, and agents** interact with real estate data in a conversational way.
