@@ -1,6 +1,8 @@
 
 
 🏡 Real Estate Insights Chatbot
+<img width="236" height="238" alt="image" src="https://github.com/user-attachments/assets/fd9b367d-3d9c-475d-b1d0-0771fc80fad3" />
+
 
 A **full-stack platform** designed to help **homebuyers, renters, investors, and agents** interact with real estate data in a conversational way.
 By integrating **AI-driven chat** with **Snowflake-powered U.S. real estate datasets**, users can easily access **property listings, pricing insights, and neighborhood comparisons** through a simple and intuitive chatbot interface.
