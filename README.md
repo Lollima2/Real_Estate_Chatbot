@@ -50,13 +50,6 @@ By integrating **AI-driven chat** with **Snowflake-powered U.S. real estate data
 
 * Ask chatbot about listings
 * Explore neighborhoods with insights.
-* Save preferred queries (future feature).
-
-
-Administrators
-
-* Manage API usage and monitor system health.
-* Control access and security.
 
 ---
 
